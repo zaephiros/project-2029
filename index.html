@@ -180,13 +180,13 @@
   /* STAT 화면은 잘 안 보인다는 피드백이 있어서, 다른 화면보다 글씨를 훨씬 크게(약 2배 수준) 키운다.
      차트 안 숫자/라벨은 SVG쪽 font-size를 직접 키웠고(barChartSVG 등), 여기는 그 바깥의
      제목/타일/드롭다운/안내문구를 키운다. STAT에만 적용되도록 .stat-view로 범위를 좁혔다. */
-  .stat-view .card h2{font-size:clamp(22px,5.6vw,27px);}
-  .stat-view .tile .v{font-size:clamp(26px,7vw,36px);}
-  .stat-view .tile .l{font-size:clamp(15px,3.6vw,18px);}
-  .stat-view .empty{font-size:22px;padding:34px 10px;}
-  .stat-view .legend{font-size:18px;gap:18px;}
-  .stat-view .more-link{font-size:18px;}
-  .stat-view .search-row select{font-size:20px;padding:11px 13px;}
+  .stat-view .card h2{font-size:clamp(18px,4.5vw,22px);}
+  .stat-view .tile .v{font-size:clamp(21px,5.6vw,29px);}
+  .stat-view .tile .l{font-size:clamp(12px,2.9vw,14px);}
+  .stat-view .empty{font-size:18px;padding:34px 10px;}
+  .stat-view .legend{font-size:14px;gap:18px;}
+  .stat-view .more-link{font-size:14px;}
+  .stat-view .search-row select{font-size:16px;padding:11px 13px;}
 </style>
 </head>
 <body data-theme="">
@@ -493,6 +493,8 @@ function renderReview(){
 let statYear = null;   // 선택된 연도 (null이면 첫 렌더 때 currentYear()로 채움)
 let statMonth = null;  // 드릴다운된 월 (null이면 월별 스코어 화면, 값이 있으면 일자별 화면)
 
+// 최근 연도가 앞에 오도록(내림차순) 정렬하되, 아직 오지 않은(현재 연도보다 큰) 연도는
+// 항상 맨 뒤로 보낸다 — "최근이 먼저, 미래는 나중에"라는 순서 요청에 맞춘 것.
 function computeYearlySeries(){
   const rows = [];
   (STATE.data.legacyYears||[]).forEach(l=>{
@@ -503,8 +505,10 @@ function computeYearlySeries(){
     const st = yearStats(rs);
     rows.push({year:Number(y), count:st.count, avg:st.avg});
   });
-  rows.sort((a,b)=>a.year-b.year);
-  return rows;
+  const cy = currentYear();
+  const past = rows.filter(r=>r.year<=cy).sort((a,b)=>b.year-a.year);
+  const future = rows.filter(r=>r.year>cy).sort((a,b)=>a.year-b.year);
+  return past.concat(future);
 }
 function courseFrequency(rounds){
   const map = {};
@@ -555,6 +559,22 @@ function yearTrend(year, limit){
     .map(r=>({date:r.month+'/'+r.day, place:r.place, value:r.level}));
   return limit ? all.slice(0, limit) : all;
 }
+// 요일별 평균 스코어. 월화수목금토일 순으로 정렬(데이터가 있는 요일만).
+function weekdayScores(rounds){
+  const names = ['일','월','화','수','목','금','토'];
+  const order = [1,2,3,4,5,6,0];
+  const byDay = {};
+  rounds.forEach(r=>{
+    if(!r.year || !r.month || !r.day) return;
+    const wd = new Date(r.year, r.month-1, r.day).getDay();
+    (byDay[wd] = byDay[wd]||[]).push(r.level);
+  });
+  return order.filter(wd=>byDay[wd] && byDay[wd].length).map(wd=>{
+    const levels = byDay[wd];
+    const avg = levels.reduce((a,b)=>a+b,0)/levels.length;
+    return {label:names[wd], value:Math.round(avg*10)/10, count:levels.length};
+  });
+}
 function average(nums){
   return nums.length ? nums.reduce((a,b)=>a+b,0)/nums.length : null;
 }
@@ -596,6 +616,7 @@ function renderStat(){
   // "OO년 스코어 분포"라는 제목 밑에 사실은 전혀 다른(전체) 데이터가 나오는 버그가 있었다.
   const freq = courseFrequency(yRounds);
   const hist = scoreHistogram(yRounds);
+  const weekday = weekdayScores(yRounds);
   // "최근 10개"는 지금 한창 진행 중인 올해(currentYear())를 볼 때만 의미가 있다.
   // 이미 다 끝난 지난 연도는 최근 10개만 잘라 보여줄 이유가 없어서 그 해 전체를 보여준다.
   const isOngoingYear = statYear === currentYear();
@@ -622,10 +643,6 @@ function renderStat(){
     ` : '<div class="empty">해당 연도 기록이 없습니다.</div>'}
   </div>
   <div class="card">
-    <h2>연도별 라운드 수</h2>
-    <div class="chart-wrap">${barChartSVG(series.map(s=>({label:String(s.year).slice(2), value:s.count})), {color:'var(--blue)', height:150})}</div>
-  </div>
-  <div class="card">
     <h2>월별 스코어${statMonth?` · ${statMonth}월`:''}</h2>
     <div class="search-row" style="margin-bottom:10px;">
       <select id="statYearSel">${yearOpts}</select>
@@ -641,12 +658,20 @@ function renderStat(){
     ${freq.length ? `<div class="chart-wrap">${hBarChartSVG(freq, {color:'var(--orange)'})}</div>` : '<div class="empty">해당 연도 기록이 없습니다.</div>'}
   </div>
   <div class="card">
+    <h2>${statYear}년 요일별 평균 스코어</h2>
+    ${weekday.length ? `<div class="chart-wrap">${scoreBarChartSVG(weekday, {color:'var(--aqua)', height:150})}</div>` : '<div class="empty">해당 연도 기록이 없습니다.</div>'}
+  </div>
+  <div class="card">
     <h2>전체 요약</h2>
     <div class="stat-tiles">
       <div class="tile"><div class="v">${overall.count}</div><div class="l">총 라운드</div></div>
       <div class="tile"><div class="v">${fmtAvg(overall.avg)}</div><div class="l">전체 평균</div></div>
       <div class="tile"><div class="v">${overall.best===null?'-':overall.best}</div><div class="l">역대 베스트</div></div>
     </div>
+  </div>
+  <div class="card">
+    <h2>연도별 라운드 수</h2>
+    <div class="chart-wrap">${barChartSVG(series.map(s=>({label:String(s.year).slice(2), value:s.count})), {color:'var(--blue)', height:150})}</div>
   </div>`;
 }
 
@@ -671,8 +696,8 @@ function barChartSVG(data, opts){
     return `<g${attrs}>
       <rect x="${x-3}" y="${padT}" width="${bwid+6}" height="${innerH}" fill="transparent"/>
       <rect x="${x}" y="${y}" width="${bwid}" height="${Math.max(bh,2)}" rx="4" fill="${opts.color||'var(--blue)'}"/>
-      <text x="${x+bwid/2}" y="${y-8}" text-anchor="middle" font-size="19" fill="var(--text-secondary)">${d.value}</text>
-      <text x="${x+bwid/2}" y="${h-10}" text-anchor="middle" font-size="19" fill="var(--text-muted)">${esc(d.label)}</text>
+      <text x="${x+bwid/2}" y="${y-8}" text-anchor="middle" font-size="15" fill="var(--text-secondary)">${d.value}</text>
+      <text x="${x+bwid/2}" y="${h-10}" text-anchor="middle" font-size="15" fill="var(--text-muted)">${esc(d.label)}</text>
     </g>`;
   }).join('');
   return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block;">
@@ -707,13 +732,13 @@ function scoreBarChartSVG(data, opts){
     return `<g${attrs}>
       <rect x="${x-3}" y="${padT}" width="${bwid+6}" height="${innerH}" fill="transparent"/>
       <rect x="${x}" y="${y}" width="${bwid}" height="${bh}" rx="4" fill="${opts.color||'var(--blue)'}"/>
-      <text x="${x+bwid/2}" y="${y-8}" text-anchor="middle" font-size="19" fill="var(--text-secondary)">${d.value}</text>
-      <text x="${x+bwid/2}" y="${h-10}" text-anchor="middle" font-size="19" fill="var(--text-muted)">${esc(d.label)}</text>
+      <text x="${x+bwid/2}" y="${y-8}" text-anchor="middle" font-size="15" fill="var(--text-secondary)">${d.value}</text>
+      <text x="${x+bwid/2}" y="${h-10}" text-anchor="middle" font-size="15" fill="var(--text-muted)">${esc(d.label)}</text>
     </g>`;
   }).join('');
   return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block;">
     <line x1="${padL-8}" y1="${padT}" x2="${w-4}" y2="${padT}" stroke="var(--baseline)" stroke-width="1" stroke-dasharray="3,3"/>
-    <text x="2" y="${padT-10}" font-size="16" fill="var(--text-muted)">파${PAR_SCORE}</text>
+    <text x="2" y="${padT-10}" font-size="13" fill="var(--text-muted)">파${PAR_SCORE}</text>
     <line x1="${padL-8}" y1="${padT+innerH}" x2="${w-4}" y2="${padT+innerH}" stroke="var(--baseline)" stroke-width="1"/>
     ${bars}
   </svg>`;
@@ -747,9 +772,9 @@ function scoreRowChartSVG(data, opts){
     const y = padTop + i*rowH;
     const raw = (maxV - d.value) / span * barMax; // 좋은(낮은) 스코어일수록 막대가 길다
     const bw = Math.max(raw, 3);
-    return `<text x="${padL-10}" y="${y+22}" text-anchor="end" font-size="19" fill="var(--text-secondary)">${esc(d.date)}</text>
+    return `<text x="${padL-10}" y="${y+22}" text-anchor="end" font-size="15" fill="var(--text-secondary)">${esc(d.date)}</text>
       <rect x="${padL}" y="${y+11}" width="${bw}" height="21" rx="5" fill="${color}"/>
-      <text x="${padL+bw+8}" y="${y+22}" font-size="17" fill="var(--text-muted)">${d.value} · ${esc(truncateLabel(d.place,8))}</text>`;
+      <text x="${padL+bw+8}" y="${y+22}" font-size="14" fill="var(--text-muted)">${d.value} · ${esc(truncateLabel(d.place,8))}</text>`;
   }).join('');
 
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block;">${rows}</svg>`;
@@ -763,9 +788,9 @@ function hBarChartSVG(data, opts){
     const y = 8 + i*rowH;
     const bw = (w-padL-padR) * (d.value/max);
     const suffix = (d.avg!=null) ? `${d.value}회 · ${d.avg}` : `${d.value}회`;
-    return `<text x="${padL-10}" y="${y+22}" text-anchor="end" font-size="17" fill="var(--text-secondary)">${esc(truncateLabel(d.label,6))}</text>
+    return `<text x="${padL-10}" y="${y+22}" text-anchor="end" font-size="14" fill="var(--text-secondary)">${esc(truncateLabel(d.label,6))}</text>
       <rect x="${padL}" y="${y+7}" width="${Math.max(bw,3)}" height="22" rx="5" fill="${opts.color||'var(--orange)'}"/>
-      <text x="${padL+bw+8}" y="${y+22}" font-size="17" fill="var(--text-muted)">${suffix}</text>`;
+      <text x="${padL+bw+8}" y="${y+22}" font-size="14" fill="var(--text-muted)">${suffix}</text>`;
   }).join('');
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block;">${rows}</svg>`;
 }
