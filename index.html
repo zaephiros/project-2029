@@ -176,6 +176,7 @@
     color:var(--blue-dark);font-weight:700;font-size:14px;padding:2px 8px;border-radius:6px;margin-right:6px;}
   .config-hint{font-size:14px;color:var(--text-muted);line-height:1.6;margin-top:8px;}
   .config-hint code{background:var(--surface-2);padding:1px 5px;border-radius:5px;}
+  .debug-output{min-height:260px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;white-space:pre;}
 </style>
 </head>
 <body data-theme="">
@@ -870,6 +871,9 @@ function openSettingsModal(forceOpen){
         <button class="btn btn-ghost" id="btnTestSettings">연결 테스트</button>
         ${forceOpen?'':'<button class="btn btn-ghost" id="btnCloseSettings">닫기</button>'}
       </div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn btn-ghost" id="btnDebugLegacy">🔍 2017~2021 데이터 진단</button>
+      </div>
     </div>
   </div>`;
   document.getElementById('btnSaveSettings').onclick = async ()=>{
@@ -885,8 +889,53 @@ function openSettingsModal(forceOpen){
     try{ await apiGet('ping'); toast('연결 성공 ✅'); }
     catch(e){ toast('연결 실패: '+e.message); }
   };
+  document.getElementById('btnDebugLegacy').onclick = openDebugModal;
   const closeBtn = document.getElementById('btnCloseSettings');
   if(closeBtn) closeBtn.onclick = closeModal;
+}
+
+// 링크 뒤에 ?action=debugLegacy 를 직접 붙여야 하는 방식은 URL 편집이 어려운 분들껜
+// 진입장벽이 높아서, 앱 안에서 버튼 하나로 같은 진단 결과를 바로 보고 복사할 수 있게 만든
+// 화면. 내용은 Code.gs의 action=debugLegacy 응답을 그대로 보여준다.
+async function openDebugModal(){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+  <div class="modal-overlay" id="ovDebug">
+    <div class="modal">
+      <h3>🔍 2017~2021 데이터 진단</h3>
+      <div class="field">
+        <div class="config-hint" id="debugStatus">불러오는 중...</div>
+        <textarea id="debugOutput" class="debug-output" readonly></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnCopyDebug">결과 복사</button>
+        <button class="btn btn-ghost" id="btnCloseDebug">닫기</button>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('btnCloseDebug').onclick = closeModal;
+  document.getElementById('btnCopyDebug').onclick = ()=>{
+    const ta = document.getElementById('debugOutput');
+    if(!ta.value){ toast('복사할 내용이 없습니다'); return; }
+    ta.focus(); ta.select(); ta.setSelectionRange(0, 999999);
+    let ok = false;
+    try{ ok = document.execCommand('copy'); }catch(e){}
+    if(ok){ toast('복사되었습니다 - 대화창에 붙여넣어 주세요'); return; }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(ta.value)
+        .then(()=>toast('복사되었습니다 - 대화창에 붙여넣어 주세요'))
+        .catch(()=>toast('복사 실패 - 위 내용을 직접 선택해서 복사해주세요'));
+    } else {
+      toast('복사 실패 - 위 내용을 직접 선택해서 복사해주세요');
+    }
+  };
+  try{
+    const result = await apiGet('debugLegacy');
+    document.getElementById('debugStatus').textContent = '아래 내용을 "결과 복사" 눌러서 대화창에 붙여넣어 주세요.';
+    document.getElementById('debugOutput').value = JSON.stringify(result, null, 2);
+  }catch(e){
+    document.getElementById('debugStatus').textContent = '불러오기 실패: ' + (e.message || e) + ' (설정에 저장된 URL과 배포 상태를 확인해주세요)';
+  }
 }
 
 /* ======================= 모달: 라운드 추가 / 다음 라운드 예약 ======================= */
