@@ -213,7 +213,7 @@ let STATE = {
 };
 // Code.gs를 고칠 때마다 그 안의 BACKEND_VERSION도 함께 올려서 여기 숫자와 맞춘다.
 // 배포한 Apps Script가 이 값보다 낮으면(=재배포를 안 한 경우) 화면에 안내 배너를 띄운다.
-const EXPECTED_BACKEND_VERSION = 6;
+const EXPECTED_BACKEND_VERSION = 9;
 
 function toast(msg){
   const t = document.getElementById('toast');
@@ -579,10 +579,13 @@ function renderStat(){
   }
 
   const yRounds = STATE.data.years[statYear]||[];
-  const all2022plus = allRoundsFlat();
-  const overall = yearStats(all2022plus);
-  const freq = courseFrequency(yRounds.length?yRounds:all2022plus);
-  const hist = scoreHistogram(yRounds.length?yRounds:all2022plus);
+  const allRounds = allRoundsFlat();
+  const overall = yearStats(allRounds);
+  // 선택된 연도에 실제 라운드 데이터가 없으면(예: 아직 오지 않은 미래 연도) 빈 상태로
+  // 보여줘야 한다. 예전엔 이럴 때 전체 연도 데이터로 대신 채워서 보여줬는데, 그러면
+  // "OO년 스코어 분포"라는 제목 밑에 사실은 전혀 다른(전체) 데이터가 나오는 버그가 있었다.
+  const freq = courseFrequency(yRounds);
+  const hist = scoreHistogram(yRounds);
   const TREND_LIMIT = 10;
   const trend = yearTrend(statYear, TREND_LIMIT);
   const trendValues = trend.map(d=>d.value);
@@ -618,14 +621,14 @@ function renderStat(){
   </div>
   <div class="card">
     <h2>${statYear}년 스코어 분포</h2>
-    <div class="chart-wrap">${barChartSVG(hist, {color:'var(--aqua)', height:130})}</div>
+    ${hist.length ? `<div class="chart-wrap">${barChartSVG(hist, {color:'var(--aqua)', height:130})}</div>` : '<div class="empty">해당 연도 기록이 없습니다.</div>'}
   </div>
   <div class="card">
     <h2>자주 간 코스 TOP ${freq.length}</h2>
-    <div class="chart-wrap">${hBarChartSVG(freq, {color:'var(--orange)'})}</div>
+    ${freq.length ? `<div class="chart-wrap">${hBarChartSVG(freq, {color:'var(--orange)'})}</div>` : '<div class="empty">해당 연도 기록이 없습니다.</div>'}
   </div>
   <div class="card">
-    <h2>전체 요약 (2022~)</h2>
+    <h2>전체 요약</h2>
     <div class="stat-tiles">
       <div class="tile"><div class="v">${overall.count}</div><div class="l">총 라운드</div></div>
       <div class="tile"><div class="v">${fmtAvg(overall.avg)}</div><div class="l">전체 평균</div></div>
