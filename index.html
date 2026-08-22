@@ -177,6 +177,16 @@
   .config-hint{font-size:14px;color:var(--text-muted);line-height:1.6;margin-top:8px;}
   .config-hint code{background:var(--surface-2);padding:1px 5px;border-radius:5px;}
   .debug-output{min-height:260px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;white-space:pre;}
+  /* STAT 화면은 잘 안 보인다는 피드백이 있어서, 다른 화면보다 글씨를 훨씬 크게(약 2배 수준) 키운다.
+     차트 안 숫자/라벨은 SVG쪽 font-size를 직접 키웠고(barChartSVG 등), 여기는 그 바깥의
+     제목/타일/드롭다운/안내문구를 키운다. STAT에만 적용되도록 .stat-view로 범위를 좁혔다. */
+  .stat-view .card h2{font-size:clamp(22px,5.6vw,27px);}
+  .stat-view .tile .v{font-size:clamp(26px,7vw,36px);}
+  .stat-view .tile .l{font-size:clamp(15px,3.6vw,18px);}
+  .stat-view .empty{font-size:22px;padding:34px 10px;}
+  .stat-view .legend{font-size:18px;gap:18px;}
+  .stat-view .more-link{font-size:18px;}
+  .stat-view .search-row select{font-size:20px;padding:11px 13px;}
 </style>
 </head>
 <body data-theme="">
@@ -357,7 +367,7 @@ function render(){
   const h = currentHash();
   let body;
   if(h.startsWith('#review')) body = renderReview();
-  else if(h.startsWith('#stat')) body = renderStat();
+  else if(h.startsWith('#stat')) body = '<div class="stat-view">' + renderStat() + '</div>';
   else if(h.startsWith('#memories')) body = renderMemories();
   else body = renderHome();
   const banner = STATE.backendStale ? `
@@ -645,9 +655,9 @@ function renderStat(){
 // afterRender에서 클릭을 잡아 드릴다운할 수 있게 한다.
 function barChartSVG(data, opts){
   opts = opts||{};
-  const w = Math.max(320, data.length*46);
-  const h = opts.height||150;
-  const padL=28, padB=22, padT=10;
+  const w = Math.max(320, data.length*70);
+  const h = opts.height||190;
+  const padL=32, padB=34, padT=22;
   const max = Math.max(1, ...data.map(d=>d.value));
   const innerH = h - padB - padT;
   const bw = (w - padL - 10) / data.length;
@@ -661,11 +671,11 @@ function barChartSVG(data, opts){
     return `<g${attrs}>
       <rect x="${x-3}" y="${padT}" width="${bwid+6}" height="${innerH}" fill="transparent"/>
       <rect x="${x}" y="${y}" width="${bwid}" height="${Math.max(bh,2)}" rx="4" fill="${opts.color||'var(--blue)'}"/>
-      <text x="${x+bwid/2}" y="${y-4}" text-anchor="middle" font-size="11" fill="var(--text-secondary)">${d.value}</text>
-      <text x="${x+bwid/2}" y="${h-6}" text-anchor="middle" font-size="11" fill="var(--text-muted)">${esc(d.label)}</text>
+      <text x="${x+bwid/2}" y="${y-8}" text-anchor="middle" font-size="19" fill="var(--text-secondary)">${d.value}</text>
+      <text x="${x+bwid/2}" y="${h-10}" text-anchor="middle" font-size="19" fill="var(--text-muted)">${esc(d.label)}</text>
     </g>`;
   }).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="max-width:100%;">
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block;">
     <line x1="${padL}" y1="${padT+innerH}" x2="${w-6}" y2="${padT+innerH}" stroke="var(--baseline)" stroke-width="1"/>
     ${bars}
   </svg>`;
@@ -679,9 +689,9 @@ const PAR_SCORE = 72; // 기준(파) 스코어.
 // 좋은 스코어라는 뜻이 된다(일반 막대그래프처럼 바닥에서 위로 자란다).
 function scoreBarChartSVG(data, opts){
   opts = opts||{};
-  const w = Math.max(320, data.length*46);
-  const h = opts.height||150;
-  const padL=30, padB=22, padT=26;
+  const w = Math.max(320, data.length*70);
+  const h = opts.height||190;
+  const padL=32, padB=34, padT=44;
   const innerH = h - padB - padT;
   const maxVal = Math.max(PAR_SCORE+8, ...data.map(d=>d.value)); // 최악(가장 나쁜) 스코어 쪽 끝
   const span = Math.max(4, maxVal - PAR_SCORE);
@@ -697,13 +707,13 @@ function scoreBarChartSVG(data, opts){
     return `<g${attrs}>
       <rect x="${x-3}" y="${padT}" width="${bwid+6}" height="${innerH}" fill="transparent"/>
       <rect x="${x}" y="${y}" width="${bwid}" height="${bh}" rx="4" fill="${opts.color||'var(--blue)'}"/>
-      <text x="${x+bwid/2}" y="${y-4}" text-anchor="middle" font-size="11" fill="var(--text-secondary)">${d.value}</text>
-      <text x="${x+bwid/2}" y="${h-6}" text-anchor="middle" font-size="11" fill="var(--text-muted)">${esc(d.label)}</text>
+      <text x="${x+bwid/2}" y="${y-8}" text-anchor="middle" font-size="19" fill="var(--text-secondary)">${d.value}</text>
+      <text x="${x+bwid/2}" y="${h-10}" text-anchor="middle" font-size="19" fill="var(--text-muted)">${esc(d.label)}</text>
     </g>`;
   }).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="max-width:100%;">
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block;">
     <line x1="${padL-8}" y1="${padT}" x2="${w-4}" y2="${padT}" stroke="var(--baseline)" stroke-width="1" stroke-dasharray="3,3"/>
-    <text x="2" y="${padT-8}" font-size="11" fill="var(--text-muted)">파${PAR_SCORE}</text>
+    <text x="2" y="${padT-10}" font-size="16" fill="var(--text-muted)">파${PAR_SCORE}</text>
     <line x1="${padL-8}" y1="${padT+innerH}" x2="${w-4}" y2="${padT+innerH}" stroke="var(--baseline)" stroke-width="1"/>
     ${bars}
   </svg>`;
@@ -721,8 +731,8 @@ function truncateLabel(s, n){
 function scoreRowChartSVG(data, opts){
   opts = opts||{};
   if(!data.length) return '<div class="empty">기록이 없습니다.</div>';
-  const w = 340, rowH = 30, padTop = 8;
-  const padL = 74, padR = 96;
+  const w = 420, rowH = 48, padTop = 10;
+  const padL = 112, padR = 140;
   const h = padTop + data.length*rowH + 8;
   const barMax = w - padL - padR;
   // 파(72) 같은 고정 기준선 없이, 지금 보이는 라운드들 안에서 제일 좋은/나쁜 스코어를
@@ -737,27 +747,27 @@ function scoreRowChartSVG(data, opts){
     const y = padTop + i*rowH;
     const raw = (maxV - d.value) / span * barMax; // 좋은(낮은) 스코어일수록 막대가 길다
     const bw = Math.max(raw, 3);
-    return `<text x="${padL-8}" y="${y+15}" text-anchor="end" font-size="11.5" fill="var(--text-secondary)">${esc(d.date)}</text>
-      <rect x="${padL}" y="${y+6}" width="${bw}" height="13" rx="4" fill="${color}"/>
-      <text x="${padL+bw+6}" y="${y+15}" font-size="11" fill="var(--text-muted)">${d.value} · ${esc(truncateLabel(d.place,8))}</text>`;
+    return `<text x="${padL-10}" y="${y+22}" text-anchor="end" font-size="19" fill="var(--text-secondary)">${esc(d.date)}</text>
+      <rect x="${padL}" y="${y+11}" width="${bw}" height="21" rx="5" fill="${color}"/>
+      <text x="${padL+bw+8}" y="${y+22}" font-size="17" fill="var(--text-muted)">${d.value} · ${esc(truncateLabel(d.place,8))}</text>`;
   }).join('');
 
-  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="max-width:100%;">${rows}</svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block;">${rows}</svg>`;
 }
 function hBarChartSVG(data, opts){
   opts = opts||{};
-  const w = 360, rowH = 26, padL = 100, padR = 92;
-  const h = data.length*rowH + 10;
+  const w = 420, rowH = 44, padL = 158, padR = 120;
+  const h = data.length*rowH + 12;
   const max = Math.max(1, ...data.map(d=>d.value));
   let rows = data.map((d,i)=>{
-    const y = 6 + i*rowH;
+    const y = 8 + i*rowH;
     const bw = (w-padL-padR) * (d.value/max);
     const suffix = (d.avg!=null) ? `${d.value}회 · ${d.avg}` : `${d.value}회`;
-    return `<text x="${padL-8}" y="${y+14}" text-anchor="end" font-size="11" fill="var(--text-secondary)">${esc(d.label)}</text>
-      <rect x="${padL}" y="${y+3}" width="${Math.max(bw,3)}" height="14" rx="4" fill="${opts.color||'var(--orange)'}"/>
-      <text x="${padL+bw+6}" y="${y+14}" font-size="11" fill="var(--text-muted)">${suffix}</text>`;
+    return `<text x="${padL-10}" y="${y+22}" text-anchor="end" font-size="17" fill="var(--text-secondary)">${esc(truncateLabel(d.label,6))}</text>
+      <rect x="${padL}" y="${y+7}" width="${Math.max(bw,3)}" height="22" rx="5" fill="${opts.color||'var(--orange)'}"/>
+      <text x="${padL+bw+8}" y="${y+22}" font-size="17" fill="var(--text-muted)">${suffix}</text>`;
   }).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="max-width:100%;">${rows}</svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block;">${rows}</svg>`;
 }
 
 /* ======================= 추억 (3-3) ======================= */
