@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>라운딩 다이어리</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="theme-color" content="#2a78d6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="라운딩다이어리">
+<style>
+  :root{
+    color-scheme: light;
+    --surface-0:#f9f9f7;
+    --surface-1:#fcfcfb;
+    --surface-2:#ffffff;
+    --text-primary:#0b0b0b;
+    --text-secondary:#52514e;
+    --text-muted:#898781;
+    --grid:#e1e0d9;
+    --border:rgba(11,11,11,0.10);
+    --baseline:#c3c2b7;
+    --blue:#2a78d6;
+    --blue-dark:#1c5cab;
+    --orange:#eb6834;
+    --aqua:#1baf7a;
+    --yellow:#eda100;
+    --magenta:#e87ba4;
+    --green:#0ca30c;
+    --violet:#4a3aa7;
+    --red:#e34948;
+    --good-text:#006300;
+    --radius:14px;
+    --radius-sm:10px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])){
+      color-scheme: dark;
+      --surface-0:#0d0d0d;
+      --surface-1:#1a1a19;
+      --surface-2:#232322;
+      --text-primary:#ffffff;
+      --text-secondary:#c3c2b7;
+      --text-muted:#8f8d87;
+      --grid:#2c2c2a;
+      --border:rgba(255,255,255,0.10);
+      --baseline:#383835;
+      --blue:#3987e5;
+      --blue-dark:#5598e7;
+      --orange:#d95926;
+      --aqua:#199e70;
+      --yellow:#c98500;
+      --magenta:#d55181;
+      --green:#0ca30c;
+      --violet:#9085e9;
+      --red:#e66767;
+      --good-text:#0ca30c;
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--surface-0);color:var(--text-primary);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;}
+  body{padding-bottom:88px;}
+  a{color:inherit;}
+  button{font-family:inherit;}
+  .header{position:sticky;top:0;z-index:20;background:var(--surface-1);
+    border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:10px;}
+  .header h1{font-size:19px;margin:0;flex:1;display:flex;align-items:center;gap:6px;}
+  .icon-btn{width:36px;height:36px;border-radius:10px;border:1px solid var(--border);
+    background:var(--surface-2);color:var(--text-secondary);display:flex;align-items:center;
+    justify-content:center;cursor:pointer;font-size:18px;}
+  .icon-btn:active{transform:scale(0.94);}
+  .tabs{display:flex;gap:4px;padding:6px 12px 0;background:var(--surface-1);
+    border-bottom:1px solid var(--border);position:sticky;top:60px;z-index:19;overflow-x:auto;}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    padding:9px 6px 10px;font-weight:600;color:var(--text-muted);
+    border-bottom:2.5px solid transparent;white-space:nowrap;cursor:pointer;min-width:64px;}
+  .tab .tab-icon{font-size:25px;line-height:1;}
+  .tab .tab-label{font-size:14.5px;}
+  .tab.active{color:var(--blue);border-color:var(--blue);}
+  main{padding:10px 10px 20px;max-width:920px;margin:0 auto;}
+  .card{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius);
+    padding:clamp(10px,3vw,16px);margin-bottom:10px;}
+  .card h2{font-size:clamp(14px,3.2vw,16px);margin:0 0 10px;color:var(--text-secondary);font-weight:700;
+    display:flex;align-items:center;justify-content:space-between;}
+  /* 홈 화면은 상하로 배치 (라운딩 요약 → NEXT 라운딩) */
+  .home-grid{display:block;}
+  .warn-banner{background:color-mix(in srgb, var(--yellow) 22%, var(--surface-1));
+    border:1px solid var(--yellow);color:var(--text-primary);font-size:14px;line-height:1.5;
+    padding:9px 12px;border-radius:10px;margin:0 0 10px;}
+  /* 월별 배경색: 각 행/카드의 --m-color 를 옅게 배경에 섞어 넣는 방식 (테두리 줄무늬 대신) */
+  .m-tinted{background:color-mix(in srgb, var(--m-color, var(--border)) 16%, var(--surface-2));
+    border:1px solid color-mix(in srgb, var(--m-color, var(--border)) 38%, var(--border));}
+  .upcoming-list{display:flex;flex-direction:column;gap:7px;margin-bottom:10px;}
+  .upcoming-card{border-radius:12px;padding:9px 12px;cursor:pointer;min-width:0;}
+  .upcoming-card .meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .upcoming-card .date{font-size:14px;color:var(--text-muted);font-weight:600;flex-shrink:0;}
+  .upcoming-card .place{font-size:15.5px;font-weight:700;}
+  .upcoming-card .note{font-size:14.5px;color:var(--text-secondary);margin-top:4px;line-height:1.5;
+    white-space:pre-wrap;}
+  .stat-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;}
+  .tile{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);
+    padding:clamp(6px,2vw,10px) 4px;text-align:center;min-width:0;}
+  .tile .v{font-size:clamp(15px,4vw,22px);font-weight:700;font-variant-numeric:tabular-nums;}
+  .tile .l{font-size:clamp(10.5px,2.4vw,13px);color:var(--text-muted);margin-top:2px;white-space:nowrap;}
+  .round-list{display:flex;flex-direction:column;gap:5px;max-height:420px;overflow-y:auto;}
+  .round-row{display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:9px;
+    cursor:pointer;min-width:0;}
+  .round-row:active{transform:scale(0.99);}
+  .round-date{font-size:clamp(11.5px,2.6vw,14px);color:var(--text-muted);width:34px;flex-shrink:0;font-variant-numeric:tabular-nums;}
+  .round-place{flex:1;font-size:clamp(13px,3vw,15.5px);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+  .code-badge{font-size:13px;color:var(--text-secondary);border:1px solid var(--border);
+    border-radius:6px;padding:1px 6px;flex-shrink:0;background:var(--surface-1);}
+  .chip{font-size:clamp(12.5px,2.8vw,14.5px);font-weight:700;padding:2px 7px;border-radius:999px;flex-shrink:0;
+    font-variant-numeric:tabular-nums;}
+  .chip-good{background:color-mix(in srgb, var(--green) 16%, transparent);color:var(--good-text);}
+  .chip-ok{background:color-mix(in srgb, var(--blue) 16%, transparent);color:var(--blue-dark);}
+  .chip-warn{background:color-mix(in srgb, var(--yellow) 20%, transparent);color:#8a5c00;}
+  .chip-bad{background:color-mix(in srgb, var(--red) 16%, transparent);color:#a12727;}
+  .chip-pending{background:transparent;color:var(--text-muted);border:1px dashed var(--baseline);}
+  .empty{color:var(--text-muted);font-size:15px;text-align:center;padding:24px 10px;}
+  .btn{border:none;border-radius:10px;padding:9px 14px;font-size:15.5px;font-weight:700;
+    cursor:pointer;}
+  .btn-primary{background:var(--blue);color:#fff;}
+  .btn-ghost{background:var(--surface-2);color:var(--text-secondary);border:1px solid var(--border);}
+  .btn-danger{background:transparent;color:var(--red);border:1px solid var(--border);}
+  .btn-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+  .fab{position:fixed;right:18px;bottom:22px;z-index:30;background:var(--blue);color:#fff;
+    border:none;border-radius:999px;padding:14px 20px;font-size:16px;font-weight:700;
+    box-shadow:0 6px 18px rgba(0,0,0,0.25);cursor:pointer;display:flex;align-items:center;gap:6px;}
+  .fab:active{transform:scale(0.96);}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:50;display:flex;
+    align-items:flex-end;justify-content:center;}
+  @media(min-width:600px){.modal-overlay{align-items:center;}}
+  .modal{background:var(--surface-1);width:100%;max-width:480px;border-radius:16px 16px 0 0;
+    padding:18px;max-height:88vh;overflow-y:auto;}
+  @media(min-width:600px){.modal{border-radius:16px;}}
+  .modal h3{margin:0 0 14px;font-size:18px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:14.5px;color:var(--text-secondary);margin-bottom:5px;font-weight:600;}
+  .field input,.field textarea,.field select{width:100%;padding:10px;border-radius:9px;
+    border:1px solid var(--border);background:var(--surface-2);color:var(--text-primary);
+    font-family:inherit;font-size:16px;}
+  .field textarea{min-height:110px;resize:vertical;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text-primary);
+    color:var(--surface-1);padding:10px 18px;border-radius:999px;font-size:15px;z-index:80;
+    opacity:0;transition:opacity .25s;pointer-events:none;}
+  .toast.show{opacity:0.95;}
+  .search-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+  .search-row input,.search-row select{padding:9px 11px;border-radius:9px;border:1px solid var(--border);
+    background:var(--surface-2);color:var(--text-primary);font-size:15.5px;}
+  .search-row input{flex:1;min-width:140px;}
+  .review-card{border-radius:12px;padding:12px 14px;margin-bottom:10px;}
+  .review-card .meta{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;}
+  .review-card .meta .date{font-size:14px;color:var(--text-muted);font-weight:600;}
+  .review-card .meta .place{font-size:15.5px;font-weight:700;}
+  .edit-link{font-size:14px;color:var(--text-muted);margin-left:auto;cursor:pointer;font-weight:600;}
+  .edit-link:hover{color:var(--blue);}
+  .review-text{font-size:15.3px;line-height:1.55;color:var(--text-secondary);white-space:pre-wrap;}
+  .review-text.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  .more-link{font-size:14px;color:var(--blue);margin-top:4px;cursor:pointer;font-weight:600;}
+  .loading{text-align:center;padding:60px 10px;color:var(--text-muted);font-size:15.5px;}
+  .section-title{font-size:17px;font-weight:700;margin:18px 0 10px;}
+  .legend{display:flex;gap:14px;font-size:13.5px;color:var(--text-muted);margin-top:6px;flex-wrap:wrap;}
+  .legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;}
+  svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;}
+  .chart-wrap{overflow-x:auto;}
+  .bar-click{cursor:pointer;}
+  .bar-click:hover rect:last-child{opacity:0.8;}
+  .memo-year-badge{display:inline-block;background:color-mix(in srgb, var(--blue) 14%, transparent);
+    color:var(--blue-dark);font-weight:700;font-size:14px;padding:2px 8px;border-radius:6px;margin-right:6px;}
+  .config-hint{font-size:14px;color:var(--text-muted);line-height:1.6;margin-top:8px;}
+  .config-hint code{background:var(--surface-2);padding:1px 5px;border-radius:5px;}
+</style>
+</head>
+<body data-theme="">
+  <div class="header">
+    <h1>⛳ 라운딩 다이어리</h1>
+    <button class="icon-btn" id="btnRefresh" title="새로고침">⟳</button>
+    <button class="icon-btn" id="btnSettings" title="설정">⚙</button>
+  </div>
+  <div class="tabs" id="tabs">
+    <div class="tab" data-hash="#home"><span class="tab-icon">🏠</span><span class="tab-label">홈</span></div>
+    <div class="tab" data-hash="#review"><span class="tab-icon">📝</span><span class="tab-label">리뷰</span></div>
+    <div class="tab" data-hash="#stat"><span class="tab-icon">📊</span><span class="tab-label">STAT</span></div>
+    <div class="tab" data-hash="#memories"><span class="tab-icon">🕰️</span><span class="tab-label">추억</span></div>
+  </div>
+  <main id="view"><div class="loading">불러오는 중…</div></main>
+  <button class="fab" id="fabAdd">＋ 라운드 추가</button>
+  <div id="modalRoot"></div>
+  <div class="toast" id="toast"></div>
+
+<script>
+/* ======================= 설정/상태 ======================= */
+const CFG_KEY = 'golf_app_config_v1';
+const CACHE_KEY = 'golf_app_cache_v1';
+
+function getConfig(){
+  try{ return JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); }catch(e){ return {}; }
+}
+function setConfig(c){ localStorage.setItem(CFG_KEY, JSON.stringify(c)); }
+
+let STATE = {
+  data: null,       // {years:{}, upcoming:[], legacyYears:[], version}
+  loading: false,
+  error: null,
+};
+// Code.gs를 고칠 때마다 그 안의 BACKEND_VERSION도 함께 올려서 여기 숫자와 맞춘다.
+// 배포한 Apps Script가 이 값보다 낮으면(=재배포를 안 한 경우) 화면에 안내 배너를 띄운다.
+const EXPECTED_BACKEND_VERSION = 6;
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ======================= 데이터 로딩 ======================= */
+function scriptUrl(){ return (getConfig().scriptUrl || '').trim(); }
+
+async function apiGet(action){
+  const url = scriptUrl();
+  if(!url) throw new Error('NO_URL');
+  const res = await fetch(url + '?action=' + encodeURIComponent(action) + '&_=' + Date.now());
+  const json = await res.json();
+  if(json.error) throw new Error(json.error);
+  return json;
+}
+
+async function apiPost(payload){
+  const url = scriptUrl();
+  if(!url) throw new Error('NO_URL');
+  const res = await fetch(url, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(payload)
+  });
+  const json = await res.json();
+  if(json.error) throw new Error(json.error);
+  return json;
+}
+
+async function loadData(showLoading){
+  if(!scriptUrl()){
+    openSettingsModal(true);
+    return;
+  }
+  STATE.loading = true;
+  if(showLoading) render();
+  try{
+    const data = await apiGet('data');
+    STATE.data = data;
+    STATE.error = null;
+    STATE.backendStale = !data.version || data.version < EXPECTED_BACKEND_VERSION;
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  }catch(err){
+    STATE.error = String(err.message || err);
+    const cached = localStorage.getItem(CACHE_KEY);
+    if(cached){ STATE.data = JSON.parse(cached); }
+    toast('불러오기 실패: ' + STATE.error + (cached ? ' (이전 데이터 표시)' : ''));
+  }finally{
+    STATE.loading = false;
+    render();
+  }
+}
+
+/* ======================= 유틸 ======================= */
+function allRoundsFlat(){
+  if(!STATE.data || !STATE.data.years) return [];
+  let out = [];
+  Object.keys(STATE.data.years).forEach(y=>{
+    (STATE.data.years[y]||[]).forEach(r=>out.push(r));
+  });
+  out.sort((a,b)=> (b.year-a.year) || (b.month-a.month) || (b.day-a.day) || (b.no-a.no));
+  return out;
+}
+function yearsAvailable(){
+  if(!STATE.data || !STATE.data.years) return [];
+  return Object.keys(STATE.data.years).map(Number).sort((a,b)=>b-a);
+}
+function currentYear(){
+  const ys = yearsAvailable();
+  const now = new Date().getFullYear();
+  if(ys.includes(now)) return now;
+  return ys.length ? ys[0] : now;
+}
+function yearStats(rounds){
+  if(!rounds || !rounds.length) return {count:0, avg:null, best:null, worst:null};
+  const levels = rounds.map(r=>r.level);
+  const sum = levels.reduce((a,b)=>a+b,0);
+  return {
+    count: rounds.length,
+    avg: sum/rounds.length,
+    best: Math.min(...levels),
+    worst: Math.max(...levels)
+  };
+}
+function fmtAvg(v){ return v===null||v===undefined||isNaN(v) ? '-' : v.toFixed(1); }
+function fmtDate(m,d){ return (m||'-') + '/' + (d||'-'); }
+function scoreChipClass(level, avg){
+  if(avg===null||avg===undefined) return 'chip-ok';
+  const diff = level - avg;
+  if(diff <= -4) return 'chip-good';
+  if(diff <= 3) return 'chip-ok';
+  if(diff <= 7) return 'chip-warn';
+  return 'chip-bad';
+}
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+const MONTH_COLORS = ['#e34948','#eb6834','#eda100','#8a9a1b','#1baf7a','#1b9aaf','#2a78d6','#4a3aa7','#8a3aa7','#c93aa1','#e8628a','#b03a3a'];
+function monthColor(m){ return MONTH_COLORS[((Number(m)||1)-1+12)%12]; }
+function monthLegendHtml(months){
+  const list = (months && months.length) ? months.slice().sort((a,b)=>a-b) : [1,2,3,4,5,6,7,8,9,10,11,12];
+  return `<div class="month-legend">${list.map(m=>`<span class="item"><span class="month-dot" style="--m-color:${monthColor(m)}"></span>${m}월</span>`).join('')}</div>`;
+}
+function findRoundByRow(year, rowIndex){
+  const inYear = (STATE.data.years[year]||[]).find(r=>String(r.rowIndex)===String(rowIndex));
+  if(inYear) return inYear;
+  return (STATE.data.upcoming||[]).find(r=>String(r.year)===String(year) && String(r.rowIndex)===String(rowIndex));
+}
+
+/* ======================= 라우팅/렌더 ======================= */
+function currentHash(){ return location.hash || '#home'; }
+
+function route(){
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.classList.toggle('active', t.dataset.hash === currentHash());
+  });
+  render();
+}
+window.addEventListener('hashchange', route);
+document.getElementById('tabs').addEventListener('click', e=>{
+  const t = e.target.closest('.tab');
+  if(t) location.hash = t.dataset.hash;
+});
+
+function render(){
+  const view = document.getElementById('view');
+  if(STATE.loading && !STATE.data){
+    view.innerHTML = '<div class="loading">불러오는 중…</div>';
+    return;
+  }
+  if(!STATE.data){
+    view.innerHTML = '<div class="loading">데이터가 없습니다.<br><br>'+
+      '<button class="btn btn-primary" onclick="openSettingsModal(true)">설정 열기</button></div>';
+    return;
+  }
+  const h = currentHash();
+  let body;
+  if(h.startsWith('#review')) body = renderReview();
+  else if(h.startsWith('#stat')) body = renderStat();
+  else if(h.startsWith('#memories')) body = renderMemories();
+  else body = renderHome();
+  const banner = STATE.backendStale ? `
+    <div class="warn-banner">⚠ 백엔드(Code.gs)가 최신 버전이 아닌 것 같아요 (현재 v${STATE.data.version||0}, 필요 v${EXPECTED_BACKEND_VERSION}).
+    구글시트 확장프로그램 → Apps Script에서 최신 Code.gs를 붙여넣고 <b>배포 → 배포 관리 → 새 버전으로 배포</b>해주세요. 최근 데이터(예: 이번달 라운드)가 안 보이면 대부분 이 문제예요.</div>` : '';
+  view.innerHTML = banner + body;
+  afterRender(h);
+}
+
+/* ======================= 홈 ======================= */
+function todayTime(){
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+}
+// 오늘보다 뒤(미래)의 예정 라운드 → NEXT 라운딩 카드
+function upcomingFuture(){
+  const t0 = todayTime();
+  return (STATE.data.upcoming||[])
+    .map(u=>({...u, _t: new Date(u.year, (u.month||1)-1, u.day||1).getTime()}))
+    .filter(u=>u._t > t0)
+    .sort((a,b)=>a._t-b._t);
+}
+// 오늘이거나 이미 지난 예정 라운드(아직 스코어/후기 미입력) → 라운딩 요약에 섞어서 "입력 필요"로 표시
+function pendingPastDue(year){
+  const t0 = todayTime();
+  return (STATE.data.upcoming||[])
+    .filter(u=>u.year===year)
+    .map(u=>({...u, _t: new Date(u.year, (u.month||1)-1, u.day||1).getTime()}))
+    .filter(u=>u._t <= t0);
+}
+
+function renderHome(){
+  const y = currentYear();
+  const completed = (STATE.data.years[y]||[]).map(r=>({...r, _pending:false}));
+  const pending = pendingPastDue(y).map(r=>({...r, _pending:true}));
+  const rounds = completed.concat(pending).sort((a,b)=>(b.month-a.month)||(b.day-a.day)||(b.no-a.no));
+  const st = yearStats(completed);
+  const upcoming = upcomingFuture();
+
+  const listHtml = rounds.length ? rounds.map(r=>`
+    <div class="round-row m-tinted" style="--m-color:${monthColor(r.month)}" data-edit-round="${r.year}|${r.rowIndex}" title="탭하여 후기 입력/수정">
+      <div class="round-date">${fmtDate(r.month,r.day)}</div>
+      <div class="round-place">${esc(r.place)}</div>
+      ${r.code ? `<span class="code-badge">${esc(r.code)}</span>` : ''}
+      ${r._pending ? `<span class="chip chip-pending">입력필요</span>` : `<span class="chip ${scoreChipClass(r.level, st.avg)}">${r.level}</span>`}
+    </div>`).join('') : '<div class="empty">아직 기록된 라운드가 없습니다.</div>';
+
+  return `
+  <div class="card">
+    <h2>${y}년도 라운딩 요약</h2>
+    <div class="stat-tiles">
+      <div class="tile"><div class="v">${st.count}</div><div class="l">라운드 수</div></div>
+      <div class="tile"><div class="v">${fmtAvg(st.avg)}</div><div class="l">평균 스코어</div></div>
+      <div class="tile"><div class="v">${st.best===null?'-':st.best}</div><div class="l">베스트</div></div>
+    </div>
+    <div class="round-list">${listHtml}</div>
+  </div>
+  <div class="card">
+    <h2>NEXT 라운딩</h2>
+    <div class="upcoming-list">
+      ${upcoming.length ? upcoming.map(u=>`
+        <div class="upcoming-card m-tinted" style="--m-color:${monthColor(u.month)}" data-edit-round="${u.year}|${u.rowIndex}" title="탭하여 수정">
+          <div class="meta">
+            <span class="date">${u.year}.${String(u.month).padStart(2,'0')}.${String(u.day).padStart(2,'0')}</span>
+            <span class="place">${esc(u.place)}</span>
+            ${u.code ? `<span class="code-badge">${esc(u.code)}</span>` : ''}
+          </div>
+          ${u.review ? `<div class="note">${esc(u.review)}</div>` : ''}
+        </div>`).join('') : '<div class="empty" style="padding:6px 0 4px;">예정된 라운드가 없습니다. 우측 하단 ＋ 버튼으로 추가해보세요.</div>'}
+    </div>
+  </div>`;
+}
+
+/* ======================= 리뷰 (3-1) ======================= */
+let reviewFilterYear = 'all';
+let reviewQuery = '';
+let expandedReviews = new Set();
+
+function renderReview(){
+  const years = yearsAvailable();
+  let rounds = allRoundsFlat();
+  if(reviewFilterYear !== 'all') rounds = rounds.filter(r=>String(r.year)===String(reviewFilterYear));
+  if(reviewQuery.trim()){
+    const q = reviewQuery.trim().toLowerCase();
+    rounds = rounds.filter(r => (r.place+r.review+r.code).toLowerCase().includes(q));
+  }
+  const yearOpts = ['<option value="all">전체 연도</option>']
+    .concat(years.map(y=>`<option value="${y}" ${String(y)===String(reviewFilterYear)?'selected':''}>${y}</option>`)).join('');
+
+  const cards = rounds.map(r=>{
+    const key = r.year+'-'+r.no;
+    const expanded = expandedReviews.has(key);
+    const hasReview = r.review && r.review.trim().length>0;
+    return `
+    <div class="review-card m-tinted" style="--m-color:${monthColor(r.month)}">
+      <div class="meta">
+        <span class="date">${r.year}.${String(r.month).padStart(2,'0')}.${String(r.day).padStart(2,'0')}</span>
+        <span class="place">${esc(r.place)}</span>
+        <span class="chip ${scoreChipClass(r.level, null)}">${r.level}</span>
+        ${r.code ? `<span class="code-badge">${esc(r.code)}</span>` : ''}
+        <span class="edit-link" data-edit-round="${r.year}|${r.rowIndex}">✏ 수정</span>
+      </div>
+      ${hasReview ? `
+        <div class="review-text ${expanded?'':'clamp'}">${esc(r.review)}</div>
+        <div class="more-link" data-toggle-review="${key}">${expanded?'접기':'더보기'}</div>
+      ` : '<div class="review-text" style="color:var(--text-muted)">후기 없음 · 탭해서 후기를 남겨보세요</div>'}
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="card">
+    <h2>리뷰 (${rounds.length}건)</h2>
+    <div class="search-row">
+      <select id="reviewYearSel">${yearOpts}</select>
+      <input id="reviewSearch" type="text" placeholder="장소·내용 검색" value="${esc(reviewQuery)}">
+    </div>
+    ${monthLegendHtml()}
+    ${cards || '<div class="empty">해당 조건의 리뷰가 없습니다.</div>'}
+  </div>`;
+}
+
+/* ======================= STAT (3-2) ======================= */
+let statYear = null;   // 선택된 연도 (null이면 첫 렌더 때 currentYear()로 채움)
+let statMonth = null;  // 드릴다운된 월 (null이면 월별 스코어 화면, 값이 있으면 일자별 화면)
+
+function computeYearlySeries(){
+  const rows = [];
+  (STATE.data.legacyYears||[]).forEach(l=>{
+    rows.push({year:l.year, count:l.round, avg:l.average});
+  });
+  Object.keys(STATE.data.years||{}).forEach(y=>{
+    const rs = STATE.data.years[y];
+    const st = yearStats(rs);
+    rows.push({year:Number(y), count:st.count, avg:st.avg});
+  });
+  rows.sort((a,b)=>a.year-b.year);
+  return rows;
+}
+function courseFrequency(rounds){
+  const map = {};
+  rounds.forEach(r=>{
+    if(!map[r.place]) map[r.place] = {count:0, sum:0, scored:0};
+    map[r.place].count++;
+    if(typeof r.level==='number' && isFinite(r.level)){ map[r.place].sum += r.level; map[r.place].scored++; }
+  });
+  return Object.keys(map).map(k=>({
+    label:k,
+    value:map[k].count,
+    avg: map[k].scored ? Math.round(map[k].sum/map[k].scored*10)/10 : null
+  })).sort((a,b)=>b.value-a.value).slice(0,10);
+}
+function scoreHistogram(rounds){
+  if(!rounds.length) return [];
+  const buckets = {};
+  rounds.forEach(r=>{
+    const b = Math.floor(r.level/5)*5;
+    const key = b+'-'+(b+4);
+    buckets[key] = (buckets[key]||0)+1;
+  });
+  return Object.keys(buckets).sort((a,b)=>parseInt(a)-parseInt(b)).map(k=>({label:k, value:buckets[k]}));
+}
+// 월별 평균 스코어. 최근 달이 먼저 오도록 역순 정렬.
+function monthlyScores(year){
+  const rounds = STATE.data.years[year]||[];
+  const byMonth = {};
+  rounds.forEach(r=>{ (byMonth[r.month] = byMonth[r.month]||[]).push(r.level); });
+  return Object.keys(byMonth).map(Number).sort((a,b)=>b-a).map(m=>{
+    const levels = byMonth[m];
+    const avg = levels.reduce((a,b)=>a+b,0)/levels.length;
+    return {key:m, label:m+'월', value:Math.round(avg*10)/10, count:levels.length};
+  });
+}
+// 특정 연/월의 일자별 스코어. 최근 날짜가 먼저 오도록 역순 정렬.
+function dailyScores(year, month){
+  return (STATE.data.years[year]||[]).filter(r=>r.month===month)
+    .slice().sort((a,b)=>b.day-a.day)
+    .map(r=>({key:r.day, label:r.day+'일', value:r.level}));
+}
+// 선택한 연도의 라운드를 최근 날짜가 위로 오도록 역순 정렬 (다른 STAT 차트와 방향 통일).
+// 최근 N개(기본 10개)만 보여준다 — 한 해 전체를 나열하면 카드가 너무 길어져서,
+// 최근 흐름만 보고 싶을 때는 이게 더 보기 편하다는 피드백에 맞춰 개수를 제한했다.
+function yearTrend(year, limit){
+  const all = (STATE.data.years[year]||[]).slice()
+    .sort((a,b)=>(b.month-a.month)||(b.day-a.day)||(b.no-a.no))
+    .map(r=>({date:r.month+'/'+r.day, place:r.place, value:r.level}));
+  return limit ? all.slice(0, limit) : all;
+}
+function average(nums){
+  return nums.length ? nums.reduce((a,b)=>a+b,0)/nums.length : null;
+}
+// 표준편차(모집단 기준) — 스코어가 얼마나 들쭉날쭉한지 보여주는 참고 수치.
+function stdDev(nums){
+  if(nums.length < 2) return null;
+  const avg = average(nums);
+  const variance = nums.reduce((a,b)=>a+(b-avg)*(b-avg), 0) / nums.length;
+  return Math.sqrt(variance);
+}
+
+function renderStat(){
+  if(statYear===null) statYear = currentYear();
+  const years = yearsAvailable();
+  const yearOpts = years.map(yy=>`<option value="${yy}" ${yy===statYear?'selected':''}>${yy}년</option>`).join('');
+  const series = computeYearlySeries();
+
+  let monthBody;
+  if(statMonth===null){
+    const monthly = monthlyScores(statYear);
+    monthBody = monthly.length
+      ? `<div class="chart-wrap">${scoreBarChartSVG(monthly.map(m=>({label:m.label,value:m.value,key:m.key})), {color:'var(--blue)', height:150, dataAttr:'data-stat-month'})}</div>
+         <div class="legend"><span>막대를 탭하면 일자별로 볼 수 있어요</span></div>`
+      : '<div class="empty">해당 연도 기록이 없습니다.</div>';
+  } else {
+    const daily = dailyScores(statYear, statMonth);
+    monthBody = `
+      <div class="more-link" id="statBackToMonths">← ${statYear}년 월별로 돌아가기</div>
+      ${daily.length
+        ? `<div class="chart-wrap">${scoreBarChartSVG(daily.map(d=>({label:d.label,value:d.value})), {color:'var(--aqua)', height:150})}</div>`
+        : '<div class="empty">기록이 없습니다.</div>'}`;
+  }
+
+  const yRounds = STATE.data.years[statYear]||[];
+  const all2022plus = allRoundsFlat();
+  const overall = yearStats(all2022plus);
+  const freq = courseFrequency(yRounds.length?yRounds:all2022plus);
+  const hist = scoreHistogram(yRounds.length?yRounds:all2022plus);
+  const TREND_LIMIT = 10;
+  const trend = yearTrend(statYear, TREND_LIMIT);
+  const trendValues = trend.map(d=>d.value);
+  const trendAvg = average(trendValues);
+  const trendSd = stdDev(trendValues);
+  const trendBest = trendValues.length ? Math.min(...trendValues) : null;
+
+  return `
+  <div class="card">
+    <h2>스코어 추이 (최근 ${trend.length}개)</h2>
+    <div class="search-row" style="margin-bottom:10px;">
+      <select id="statTrendYearSel">${yearOpts}</select>
+    </div>
+    ${trend.length ? `
+      <div class="stat-tiles" style="margin-bottom:10px;">
+        <div class="tile"><div class="v">${fmtAvg(trendAvg)}</div><div class="l">평균</div></div>
+        <div class="tile"><div class="v">${trendSd===null?'-':trendSd.toFixed(1)}</div><div class="l">표준편차</div></div>
+        <div class="tile"><div class="v">${trendBest===null?'-':trendBest}</div><div class="l">베스트</div></div>
+      </div>
+      <div class="chart-wrap">${scoreRowChartSVG(trend, {color:'var(--blue)'})}</div>
+    ` : '<div class="empty">해당 연도 기록이 없습니다.</div>'}
+  </div>
+  <div class="card">
+    <h2>연도별 라운드 수</h2>
+    <div class="chart-wrap">${barChartSVG(series.map(s=>({label:String(s.year).slice(2), value:s.count})), {color:'var(--blue)', height:150})}</div>
+  </div>
+  <div class="card">
+    <h2>월별 스코어${statMonth?` · ${statMonth}월`:''}</h2>
+    <div class="search-row" style="margin-bottom:10px;">
+      <select id="statYearSel">${yearOpts}</select>
+    </div>
+    ${monthBody}
+  </div>
+  <div class="card">
+    <h2>${statYear}년 스코어 분포</h2>
+    <div class="chart-wrap">${barChartSVG(hist, {color:'var(--aqua)', height:130})}</div>
+  </div>
+  <div class="card">
+    <h2>자주 간 코스 TOP ${freq.length}</h2>
+    <div class="chart-wrap">${hBarChartSVG(freq, {color:'var(--orange)'})}</div>
+  </div>
+  <div class="card">
+    <h2>전체 요약 (2022~)</h2>
+    <div class="stat-tiles">
+      <div class="tile"><div class="v">${overall.count}</div><div class="l">총 라운드</div></div>
+      <div class="tile"><div class="v">${fmtAvg(overall.avg)}</div><div class="l">전체 평균</div></div>
+      <div class="tile"><div class="v">${overall.best===null?'-':overall.best}</div><div class="l">역대 베스트</div></div>
+    </div>
+  </div>`;
+}
+
+/* ---- 간단 SVG 차트 ---- */
+// opts.dataAttr 을 주면 각 막대 <g>에 해당 속성(예: data-stat-month="7")을 달아서
+// afterRender에서 클릭을 잡아 드릴다운할 수 있게 한다.
+function barChartSVG(data, opts){
+  opts = opts||{};
+  const w = Math.max(320, data.length*46);
+  const h = opts.height||150;
+  const padL=28, padB=22, padT=10;
+  const max = Math.max(1, ...data.map(d=>d.value));
+  const innerH = h - padB - padT;
+  const bw = (w - padL - 10) / data.length;
+  let bars = data.map((d,i)=>{
+    const bh = max? (d.value/max*innerH) : 0;
+    const x = padL + i*bw + bw*0.18;
+    const y = padT + (innerH - bh);
+    const bwid = bw*0.64;
+    const clickable = opts.dataAttr && d.key!=null;
+    const attrs = clickable ? ` ${opts.dataAttr}="${esc(d.key)}" class="bar-click"` : '';
+    return `<g${attrs}>
+      <rect x="${x-3}" y="${padT}" width="${bwid+6}" height="${innerH}" fill="transparent"/>
+      <rect x="${x}" y="${y}" width="${bwid}" height="${Math.max(bh,2)}" rx="4" fill="${opts.color||'var(--blue)'}"/>
+      <text x="${x+bwid/2}" y="${y-4}" text-anchor="middle" font-size="11" fill="var(--text-secondary)">${d.value}</text>
+      <text x="${x+bwid/2}" y="${h-6}" text-anchor="middle" font-size="11" fill="var(--text-muted)">${esc(d.label)}</text>
+    </g>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="max-width:100%;">
+    <line x1="${padL}" y1="${padT+innerH}" x2="${w-6}" y2="${padT+innerH}" stroke="var(--baseline)" stroke-width="1"/>
+    ${bars}
+  </svg>`;
+}
+const PAR_SCORE = 72; // 기준(파) 스코어.
+// 골프는 스코어가 낮을수록 좋다. 그런데 "숫자가 클수록 막대가 길다"는 보통의 막대그래프
+// 감각(길수록 좋다)과 정반대라 계속 헷갈린다는 피드백을 받았다. 그래서 화면에 찍히는 숫자는
+// 실제 스코어 그대로 두고, 막대의 길이만 거꾸로(역수) 매핑한다 — 스코어가 나쁠수록(클수록)
+// 짧고, 좋을수록(작을수록·파에 가까울수록) 길게. 이러면 "길수록 좋다"는 평소 감각 그대로
+// 읽히면서, 숫자 자체는 왜곡 없이 진짜 스코어를 보여준다. 맨 위 파(72) 기준선까지 닿을수록
+// 좋은 스코어라는 뜻이 된다(일반 막대그래프처럼 바닥에서 위로 자란다).
+function scoreBarChartSVG(data, opts){
+  opts = opts||{};
+  const w = Math.max(320, data.length*46);
+  const h = opts.height||150;
+  const padL=30, padB=22, padT=26;
+  const innerH = h - padB - padT;
+  const maxVal = Math.max(PAR_SCORE+8, ...data.map(d=>d.value)); // 최악(가장 나쁜) 스코어 쪽 끝
+  const span = Math.max(4, maxVal - PAR_SCORE);
+  const bw = (w - padL - 10) / data.length;
+  let bars = data.map((d,i)=>{
+    const raw = (maxVal - d.value) / span * innerH; // 스코어가 좋을수록(작을수록) 막대가 길게 자란다
+    const bh = Math.max(raw, 2);
+    const x = padL + i*bw + bw*0.18;
+    const y = padT + (innerH - bh); // 바닥에서 위로 자라는 일반 막대그래프와 같은 방향
+    const bwid = bw*0.64;
+    const clickable = opts.dataAttr && d.key!=null;
+    const attrs = clickable ? ` ${opts.dataAttr}="${esc(d.key)}" class="bar-click"` : '';
+    return `<g${attrs}>
+      <rect x="${x-3}" y="${padT}" width="${bwid+6}" height="${innerH}" fill="transparent"/>
+      <rect x="${x}" y="${y}" width="${bwid}" height="${bh}" rx="4" fill="${opts.color||'var(--blue)'}"/>
+      <text x="${x+bwid/2}" y="${y-4}" text-anchor="middle" font-size="11" fill="var(--text-secondary)">${d.value}</text>
+      <text x="${x+bwid/2}" y="${h-6}" text-anchor="middle" font-size="11" fill="var(--text-muted)">${esc(d.label)}</text>
+    </g>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="max-width:100%;">
+    <line x1="${padL-8}" y1="${padT}" x2="${w-4}" y2="${padT}" stroke="var(--baseline)" stroke-width="1" stroke-dasharray="3,3"/>
+    <text x="2" y="${padT-8}" font-size="11" fill="var(--text-muted)">파${PAR_SCORE}</text>
+    <line x1="${padL-8}" y1="${padT+innerH}" x2="${w-4}" y2="${padT+innerH}" stroke="var(--baseline)" stroke-width="1"/>
+    ${bars}
+  </svg>`;
+}
+function truncateLabel(s, n){
+  s = String(s==null?'':s);
+  return s.length>n ? s.slice(0,n)+'…' : s;
+}
+// 선택한 연도의 라운드를 위(최근)에서 아래(예전)로 한 줄씩 나열하는 스코어 추이.
+// 예전엔 가로로 긴 점선그래프였는데, 폰 화면에서 옆으로 잘려 잘 안 보인다는 피드백을 받아
+// x/y축을 맞바꿔서 세로로 이어지는 형태로 바꿨다 — 줄 수가 많아지면 카드 자체가 길어지고
+// 페이지를 아래로 스크롤해서 보면 된다 (가로 스크롤이 필요 없어졌다).
+// 숫자는 실제 스코어 그대로 표시하고, 막대 길이만 거꾸로(역수) 매핑한다 —
+// 스코어가 나쁠수록 짧고, 좋을수록(파에 가까울수록) 오른쪽 파(72) 기준선까지 길게 뻗는다.
+function scoreRowChartSVG(data, opts){
+  opts = opts||{};
+  if(!data.length) return '<div class="empty">기록이 없습니다.</div>';
+  const w = 340, rowH = 30, padTop = 8;
+  const padL = 74, padR = 96;
+  const h = padTop + data.length*rowH + 8;
+  const barMax = w - padL - padR;
+  // 파(72) 같은 고정 기준선 없이, 지금 보이는 라운드들 안에서 제일 좋은/나쁜 스코어를
+  // 기준으로 상대적으로 막대 길이를 매긴다 — 표시 개수가 최근 N개로 제한된 뒤로는
+  // 이 안에서의 상대적인 흐름을 보여주는 게 더 유용하다.
+  const values = data.map(d=>d.value);
+  const minV = Math.min(...values), maxV = Math.max(...values);
+  const span = Math.max(4, maxV - minV);
+  const color = opts.color || 'var(--blue)';
+
+  const rows = data.map((d,i)=>{
+    const y = padTop + i*rowH;
+    const raw = (maxV - d.value) / span * barMax; // 좋은(낮은) 스코어일수록 막대가 길다
+    const bw = Math.max(raw, 3);
+    return `<text x="${padL-8}" y="${y+15}" text-anchor="end" font-size="11.5" fill="var(--text-secondary)">${esc(d.date)}</text>
+      <rect x="${padL}" y="${y+6}" width="${bw}" height="13" rx="4" fill="${color}"/>
+      <text x="${padL+bw+6}" y="${y+15}" font-size="11" fill="var(--text-muted)">${d.value} · ${esc(truncateLabel(d.place,8))}</text>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="max-width:100%;">${rows}</svg>`;
+}
+function hBarChartSVG(data, opts){
+  opts = opts||{};
+  const w = 360, rowH = 26, padL = 100, padR = 92;
+  const h = data.length*rowH + 10;
+  const max = Math.max(1, ...data.map(d=>d.value));
+  let rows = data.map((d,i)=>{
+    const y = 6 + i*rowH;
+    const bw = (w-padL-padR) * (d.value/max);
+    const suffix = (d.avg!=null) ? `${d.value}회 · ${d.avg}` : `${d.value}회`;
+    return `<text x="${padL-8}" y="${y+14}" text-anchor="end" font-size="11" fill="var(--text-secondary)">${esc(d.label)}</text>
+      <rect x="${padL}" y="${y+3}" width="${Math.max(bw,3)}" height="14" rx="4" fill="${opts.color||'var(--orange)'}"/>
+      <text x="${padL+bw+6}" y="${y+14}" font-size="11" fill="var(--text-muted)">${suffix}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="max-width:100%;">${rows}</svg>`;
+}
+
+/* ======================= 추억 (3-3) ======================= */
+function monthDayDist(m1,d1,m2,d2){
+  const t1 = Date.UTC(2001, m1-1, d1);
+  const t2 = Date.UTC(2001, m2-1, d2);
+  let diff = Math.abs(t1-t2)/86400000;
+  return Math.min(diff, 365-diff);
+}
+function renderMemories(){
+  const today = new Date();
+  const tm = today.getMonth()+1, td = today.getDate();
+  const rounds = allRoundsFlat();
+  const sameDay = rounds.filter(r=>r.month===tm && r.day===td).sort((a,b)=>b.year-a.year);
+  const sameWeek = rounds.filter(r=>{
+    if(r.month===tm && r.day===td) return false;
+    return monthDayDist(r.month,r.day,tm,td) <= 3;
+  }).sort((a,b)=>b.year-a.year || monthDayDist(a.month,a.day,tm,td)-monthDayDist(b.month,b.day,tm,td));
+
+  // 더보기 토글은 review card 재사용을 위해 clamp 상태를 즉석 반영
+  function cardsWithExpand(list, suffix){
+    return list.map(r=>{
+      const key = r.year+'-'+r.no+suffix;
+      const expanded = expandedReviews.has(key);
+      return `
+      <div class="review-card m-tinted" style="--m-color:${monthColor(r.month)}">
+        <div class="meta">
+          <span class="memo-year-badge">${r.year}년</span>
+          <span class="date">${r.month}/${r.day}</span>
+          <span class="place">${esc(r.place)}</span>
+          <span class="chip ${scoreChipClass(r.level,null)}">${r.level}</span>
+          ${r.code ? `<span class="code-badge">${esc(r.code)}</span>` : ''}
+          <span class="edit-link" data-edit-round="${r.year}|${r.rowIndex}">✏ 수정</span>
+        </div>
+        ${r.review ? `<div class="review-text ${expanded?'':'clamp'}">${esc(r.review)}</div>
+        <div class="more-link" data-toggle-review="${key}">${expanded?'접기':'더보기'}</div>` : '<div class="review-text" style="color:var(--text-muted)">후기 없음 · 탭해서 후기를 남겨보세요</div>'}
+      </div>`;
+    }).join('');
+  }
+
+  return `
+  <div class="card">
+    <h2>오늘의 추억 (${tm}/${td})</h2>
+    ${sameDay.length ? cardsWithExpand(sameDay,'-md') : '<div class="empty">오늘 날짜에 라운드한 기록이 없습니다.</div>'}
+  </div>
+  <div class="card">
+    <h2>이번주의 추억 (±3일)</h2>
+    ${sameWeek.length ? cardsWithExpand(sameWeek,'-mw') : '<div class="empty">이 시기 기록이 없습니다.</div>'}
+  </div>`;
+}
+
+/* ======================= 렌더 후 이벤트 바인딩 ======================= */
+function afterRender(hash){
+  document.querySelectorAll('[data-toggle-review]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const k = el.dataset.toggleReview;
+      if(expandedReviews.has(k)) expandedReviews.delete(k); else expandedReviews.add(k);
+      render();
+    });
+  });
+  if(hash.startsWith('#review')){
+    const sel = document.getElementById('reviewYearSel');
+    const inp = document.getElementById('reviewSearch');
+    if(sel) sel.addEventListener('change', ()=>{ reviewFilterYear = sel.value; render(); });
+    if(inp){
+      inp.addEventListener('input', ()=>{ reviewQuery = inp.value; render(); });
+      const endPos = inp.value.length;
+      inp.focus(); inp.setSelectionRange(endPos,endPos);
+    }
+  }
+  if(hash.startsWith('#stat')){
+    // "스코어 추이"와 "월별 스코어" 두 카드가 같은 statYear를 공유한다 —
+    // 어느 쪽 연도 선택을 바꿔도 둘 다 같은 연도로 같이 바뀐다.
+    ['statTrendYearSel','statYearSel'].forEach(id=>{
+      const sel = document.getElementById(id);
+      if(sel) sel.addEventListener('change', ()=>{
+        statYear = parseInt(sel.value, 10);
+        statMonth = null;
+        render();
+      });
+    });
+    document.querySelectorAll('[data-stat-month]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        statMonth = parseInt(el.dataset.statMonth, 10);
+        render();
+      });
+    });
+    const back = document.getElementById('statBackToMonths');
+    if(back) back.addEventListener('click', ()=>{ statMonth = null; render(); });
+  }
+  document.querySelectorAll('[data-edit-round]').forEach(el=>{
+    el.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      const [year, rowIndex] = el.dataset.editRound.split('|');
+      const r = findRoundByRow(year, rowIndex);
+      if(!r){ toast('라운드 정보를 찾을 수 없습니다. 새로고침 해주세요.'); return; }
+      openEditRoundModal(r);
+    });
+  });
+}
+
+/* ======================= 모달: 설정 ======================= */
+function openSettingsModal(forceOpen){
+  const cfg = getConfig();
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+  <div class="modal-overlay" id="ovSettings">
+    <div class="modal">
+      <h3>⚙ 설정</h3>
+      <div class="field">
+        <label>Apps Script 웹앱 URL</label>
+        <input id="inScriptUrl" type="text" placeholder="https://script.google.com/macros/s/AKfycb.../exec" value="${esc(cfg.scriptUrl||'')}">
+        <div class="config-hint">구글시트 &gt; 확장프로그램 &gt; Apps Script 에서 <code>Code.gs</code>를 붙여넣고 웹앱으로 배포한 뒤, 배포 URL을 여기에 붙여넣으세요. (설치 가이드 참고)</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSaveSettings">저장</button>
+        <button class="btn btn-ghost" id="btnTestSettings">연결 테스트</button>
+        ${forceOpen?'':'<button class="btn btn-ghost" id="btnCloseSettings">닫기</button>'}
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('btnSaveSettings').onclick = async ()=>{
+    const url = document.getElementById('inScriptUrl').value.trim();
+    setConfig({scriptUrl:url});
+    closeModal();
+    toast('저장되었습니다');
+    await loadData(true);
+  };
+  document.getElementById('btnTestSettings').onclick = async ()=>{
+    const url = document.getElementById('inScriptUrl').value.trim();
+    setConfig({scriptUrl:url});
+    try{ await apiGet('ping'); toast('연결 성공 ✅'); }
+    catch(e){ toast('연결 실패: '+e.message); }
+  };
+  const closeBtn = document.getElementById('btnCloseSettings');
+  if(closeBtn) closeBtn.onclick = closeModal;
+}
+
+/* ======================= 모달: 라운드 추가 / 다음 라운드 예약 ======================= */
+// scheduling:true 로 열면(=NEXT 라운딩의 "다음 라운드 추가" 버튼) 스코어를 비워둔 채
+// 날짜·장소만 저장할 수 있다. 실제 시트에 그대로 한 줄이 추가되고, 이후 라운드를 치고
+// 스코어/후기를 채우면(홈 목록·리뷰에서 수정) 자동으로 일반 라운드로 바뀐다.
+// 라운드 추가는 이 모달 하나로 통일한다 (완료된 라운드든, 아직 안 친 예약이든
+// 스코어를 채우느냐 비워두느냐 차이일 뿐). 예약은 홈의 "NEXT 라운딩"에,
+// 스코어를 넣으면 "라운딩 요약"에 자동으로 나뉘어 보인다.
+function openAddRoundModal(){
+  const years = yearsAvailable();
+  const y = currentYear();
+  const today = new Date();
+  const dstr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  const yearOpts = years.filter(x=>x!==2022).map(x=>`<option value="${x}" ${x===y?'selected':''}>${x}년</option>`).join('');
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+  <div class="modal-overlay" id="ovAdd">
+    <div class="modal">
+      <h3>라운드 추가</h3>
+      <div class="row2">
+        <div class="field"><label>연도</label>
+          <select id="arYear">${yearOpts}</select></div>
+        <div class="field"><label>날짜</label>
+          <input id="arDate" type="date" value="${dstr}"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>장소</label>
+          <input id="arPlace" type="text" placeholder="구장명"></div>
+        <div class="field"><label>스코어 (선택)</label>
+          <input id="arLevel" type="number" placeholder="예약만 하려면 비워두세요"></div>
+      </div>
+      <div class="field"><label>코드 / 멤버 (선택)</label>
+        <input id="arCode" type="text" placeholder="예: JO, 재우·호성 등"></div>
+      <div class="field"><label>메모 / 후기</label>
+        <textarea id="arReview" placeholder="시간대·구분 등 예약 메모, 또는 라운드 후기를 자유롭게"></textarea></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSaveAdd">저장</button>
+        <button class="btn btn-ghost" id="btnCancelAdd">취소</button>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('btnSaveAdd').onclick = async ()=>{
+    const dateVal = document.getElementById('arDate').value;
+    if(!dateVal){ toast('날짜를 선택해주세요'); return; }
+    const [,dm,dd] = dateVal.split('-').map(Number);
+    const payload = {
+      action:'addRound',
+      year: document.getElementById('arYear').value,
+      month: dm, day: dd,
+      place: document.getElementById('arPlace').value.trim(),
+      level: document.getElementById('arLevel').value.trim(),
+      code: document.getElementById('arCode').value.trim(),
+      review: document.getElementById('arReview').value.trim(),
+    };
+    if(!payload.place){ toast('장소를 입력해주세요'); return; }
+    try{
+      await apiPost(payload);
+      closeModal();
+      toast(payload.level ? '라운드가 저장되었습니다 ⛳' : '예약이 저장되었습니다');
+      await loadData(false);
+      location.hash = '#home';
+    }catch(e){ toast('실패: '+e.message); }
+  };
+  document.getElementById('btnCancelAdd').onclick = closeModal;
+}
+
+/* ======================= 모달: 라운드 수정/후기 입력 ======================= */
+// 라운딩 끝나고 스코어만 먼저 기록해뒀다가, 나중에 후기를 이어서 쓰거나
+// 내용을 고칠 때 홈 목록/리뷰 카드에서 이 모달을 연다.
+function openEditRoundModal(r){
+  const dstr = r.year+'-'+String(r.month).padStart(2,'0')+'-'+String(r.day).padStart(2,'0');
+  const levelVal = (r.level===null || r.level===undefined) ? '' : r.level;
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+  <div class="modal-overlay" id="ovEdit">
+    <div class="modal">
+      <h3>${levelVal===''?'예정 라운드 수정':'라운드 수정 · 후기 입력'}</h3>
+      <div class="row2">
+        <div class="field"><label>연도</label>
+          <input type="text" value="${r.year}년" disabled></div>
+        <div class="field"><label>날짜</label>
+          <input id="erDate" type="date" value="${dstr}" min="${r.year}-01-01" max="${r.year}-12-31"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>장소</label>
+          <input id="erPlace" type="text" value="${esc(r.place)}"></div>
+        <div class="field"><label>스코어 (선택)</label>
+          <input id="erLevel" type="number" value="${levelVal}" placeholder="아직이면 비워두세요"></div>
+      </div>
+      <div class="field"><label>코드 / 멤버 (선택)</label>
+        <input id="erCode" type="text" value="${esc(r.code)}" placeholder="예: JO, 재우·호성 등"></div>
+      <div class="field"><label>메모 / 후기</label>
+        <textarea id="erReview" placeholder="시간대·구분 등 예약 메모, 또는 라운드 후기를 자유롭게">${esc(r.review)}</textarea></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSaveEdit">저장</button>
+        <button class="btn btn-ghost" id="btnCancelEdit">취소</button>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('btnSaveEdit').onclick = async ()=>{
+    const dateVal = document.getElementById('erDate').value;
+    if(!dateVal){ toast('날짜를 선택해주세요'); return; }
+    const [,dm,dd] = dateVal.split('-').map(Number); // 연도는 원래 시트를 그대로 유지
+    const payload = {
+      action:'updateRound',
+      year: r.year, rowIndex: r.rowIndex,
+      month: dm, day: dd,
+      place: document.getElementById('erPlace').value.trim(),
+      level: document.getElementById('erLevel').value.trim(),
+      code: document.getElementById('erCode').value.trim(),
+      review: document.getElementById('erReview').value.trim(),
+    };
+    if(!payload.place){ toast('장소를 입력해주세요'); return; }
+    try{
+      await apiPost(payload);
+      closeModal();
+      toast('저장되었습니다 ⛳');
+      await loadData(false);
+    }catch(e){ toast('실패: '+e.message); }
+  };
+  document.getElementById('btnCancelEdit').onclick = closeModal;
+}
+
+function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+
+/* ======================= 초기화 ======================= */
+document.getElementById('btnSettings').addEventListener('click', ()=>openSettingsModal(false));
+document.getElementById('btnRefresh').addEventListener('click', ()=>loadData(true));
+document.getElementById('fabAdd').addEventListener('click', openAddRoundModal);
+
+route();
+loadData(true);
+
+if('serviceWorker' in navigator && location.protocol === 'https:'){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
