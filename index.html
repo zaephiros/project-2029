@@ -213,7 +213,7 @@ let STATE = {
 };
 // Code.gs를 고칠 때마다 그 안의 BACKEND_VERSION도 함께 올려서 여기 숫자와 맞춘다.
 // 배포한 Apps Script가 이 값보다 낮으면(=재배포를 안 한 경우) 화면에 안내 배너를 띄운다.
-const EXPECTED_BACKEND_VERSION = 9;
+const EXPECTED_BACKEND_VERSION = 10;
 
 function toast(msg){
   const t = document.getElementById('toast');
@@ -586,7 +586,10 @@ function renderStat(){
   // "OO년 스코어 분포"라는 제목 밑에 사실은 전혀 다른(전체) 데이터가 나오는 버그가 있었다.
   const freq = courseFrequency(yRounds);
   const hist = scoreHistogram(yRounds);
-  const TREND_LIMIT = 10;
+  // "최근 10개"는 지금 한창 진행 중인 올해(currentYear())를 볼 때만 의미가 있다.
+  // 이미 다 끝난 지난 연도는 최근 10개만 잘라 보여줄 이유가 없어서 그 해 전체를 보여준다.
+  const isOngoingYear = statYear === currentYear();
+  const TREND_LIMIT = isOngoingYear ? 10 : null;
   const trend = yearTrend(statYear, TREND_LIMIT);
   const trendValues = trend.map(d=>d.value);
   const trendAvg = average(trendValues);
@@ -595,7 +598,7 @@ function renderStat(){
 
   return `
   <div class="card">
-    <h2>스코어 추이 (최근 ${trend.length}개)</h2>
+    <h2>스코어 추이 (${isOngoingYear?'최근 ':'전체 '}${trend.length}개)</h2>
     <div class="search-row" style="margin-bottom:10px;">
       <select id="statTrendYearSel">${yearOpts}</select>
     </div>
@@ -605,7 +608,7 @@ function renderStat(){
         <div class="tile"><div class="v">${trendSd===null?'-':trendSd.toFixed(1)}</div><div class="l">표준편차</div></div>
         <div class="tile"><div class="v">${trendBest===null?'-':trendBest}</div><div class="l">베스트</div></div>
       </div>
-      <div class="chart-wrap">${scoreRowChartSVG(trend, {color:'var(--blue)'})}</div>
+      <div class="chart-wrap"${trend.length>15?' style="max-height:420px;overflow-y:auto;"':''}>${scoreRowChartSVG(trend, {color:'var(--blue)'})}</div>
     ` : '<div class="empty">해당 연도 기록이 없습니다.</div>'}
   </div>
   <div class="card">
