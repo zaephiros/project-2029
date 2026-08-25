@@ -7,8 +7,13 @@
    새로 올려도 홈 화면 앱(설치된 PWA)에는 한 박자 늦게(또는 안 켜질 때까지 계속) 반영이
    안 되는 문제가 있었다. index.html(=앱의 뼈대이자 로직 전체)은 네트워크를 먼저 시도해서
    온라인이면 항상 최신 버전을 받아오고, 오프라인일 때만 캐시로 대체하도록 바꿨다.
-   아이콘처럼 거의 안 바뀌는 정적 파일은 기존처럼 캐시 우선 방식을 유지한다. */
-const CACHE = 'golf-diary-v2';
+   아이콘처럼 거의 안 바뀌는 정적 파일은 기존처럼 캐시 우선 방식을 유지한다.
+
+   v3에서 바뀐 점: v2의 "네트워크 우선"이 실제로는 브라우저의 일반 HTTP 캐시(및
+   GitHub Pages CDN 캐시)에서 응답을 그대로 받아와 버리는 경우가 있어서, index.html을
+   새로 올려도 새로고침을 여러 번 해도 예전 화면이 계속 보이는 문제가 있었다. index.html
+   요청에 { cache: 'no-store' }를 강제로 붙여서 항상 서버까지 진짜로 새로 요청하도록 했다. */
+const CACHE = 'golf-diary-v3';
 const ASSETS = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -28,9 +33,10 @@ self.addEventListener('fetch', (e) => {
 
   const isShell = e.request.mode === 'navigate' || url.pathname.endsWith('/index.html') || url.pathname.endsWith('/');
   if (isShell) {
-    // 앱 뼈대(index.html)는 네트워크 우선: 온라인이면 항상 최신 버전을 받아온다.
+    // 앱 뼈대(index.html)는 네트워크 우선 + no-store: 브라우저/CDN 캐시를 거치지 않고
+    // 온라인이면 항상 서버의 진짜 최신 버전을 받아온다.
     e.respondWith(
-      fetch(e.request).then((res) => {
+      fetch(e.request.url, { cache: 'no-store' }).then((res) => {
         caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
         return res;
       }).catch(() => caches.match(e.request))
