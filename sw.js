@@ -20,8 +20,15 @@
    만드는 대신, 앱이 스스로 새 버전을 감지하면 자동으로 새로고침까지 하도록 index.html
    쪽에 로직을 추가했고(reg.update(), controllerchange → location.reload()), 여기서는
    그 로직이 새 서비스워커를 즉시 활성화할 수 있도록 SKIP_WAITING 메시지를 받으면
-   self.skipWaiting()을 호출하게 했다. */
-const CACHE = 'golf-diary-v4';
+   self.skipWaiting()을 호출하게 했다.
+
+   v5에서 바뀐 점: 콘솔에 "Response body is already used" 에러가 실제로 찍히는 걸 발견해서
+   고쳤다. res.clone()을 caches.open(...).then(...) 콜백 "안에서" 호출하면, 그 콜백이
+   실행되는 시점(비동기로 좀 늦게 실행됨)엔 이미 브라우저가 원본 응답의 body를 읽기
+   시작한 뒤일 수 있어서 그 시점엔 clone이 실패한다. res를 돌려주기 "전에" 미리
+   동기적으로 클론을 떠 두는 방식으로 고쳤다. (화면 자체가 깨지진 않았지만, 이 에러
+   때문에 오프라인 대비용 캐시 저장이 조용히 실패하고 있었을 수 있다.) */
+const CACHE = 'golf-diary-v5';
 const ASSETS = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -49,7 +56,8 @@ self.addEventListener('fetch', (e) => {
     // 온라인이면 항상 서버의 진짜 최신 버전을 받아온다.
     e.respondWith(
       fetch(e.request.url, { cache: 'no-store' }).then((res) => {
-        caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
+        const toCache = res.clone(); // res를 돌려주기 전에 미리 동기적으로 클론
+        caches.open(CACHE).then((c) => c.put(e.request, toCache));
         return res;
       }).catch(() => caches.match(e.request))
     );
@@ -60,7 +68,8 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     caches.match(e.request).then((cached) => {
       const fetchPromise = fetch(e.request).then((res) => {
-        caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
+        const toCache = res.clone(); // res를 돌려주기 전에 미리 동기적으로 클론
+        caches.open(CACHE).then((c) => c.put(e.request, toCache));
         return res;
       }).catch(() => cached);
       return cached || fetchPromise;
