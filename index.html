@@ -1130,8 +1130,39 @@ document.getElementById('fabAdd').addEventListener('click', openAddRoundModal);
 route();
 loadData(true);
 
+// 홈 화면에 설치된 앱(특히 아이폰)은 브라우저의 "사이트 데이터 삭제"가 전혀 안 먹는
+// 별도의 저장공간을 쓴다 — 그래서 사용자가 아무리 캐시를 지워도 홈 화면 아이콘 쪽은
+// 그대로인 경우가 있었다. 그래서 캐시를 "지워달라고 부탁"하는 방식 대신, 앱이 스스로
+// 새 버전이 있는지 확인하고 있으면 알아서 한 번 새로고침까지 하도록 바꿨다 — 사용자가
+// 따로 아무것도 안 해도 앱을 열 때마다(또는 백그라운드에서 돌아올 때마다) 자동으로
+// 최신 버전으로 갱신된다.
 if('serviceWorker' in navigator && location.protocol === 'https:'){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  navigator.serviceWorker.register('sw.js').then((reg)=>{
+    reg.update(); // 등록 직후 바로 한 번 "새 버전 있나?" 확인
+    reg.addEventListener('updatefound', ()=>{
+      const nw = reg.installing;
+      if(!nw) return;
+      nw.addEventListener('statechange', ()=>{
+        if(nw.state === 'installed' && navigator.serviceWorker.controller){
+          nw.postMessage('SKIP_WAITING');
+        }
+      });
+    });
+    // 앱을 다시 열거나(홈 화면 아이콘 탭) 백그라운드에서 돌아올 때마다 새 버전 확인.
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.visibilityState === 'visible') reg.update();
+    });
+    window.addEventListener('pageshow', ()=>reg.update());
+  }).catch(()=>{});
+
+  // 새 서비스워커가 화면을 넘겨받으면(=새 버전이 설치됨) 딱 한 번 자동으로 새로고침해서
+  // 사용자가 직접 새로고침하지 않아도 최신 화면이 바로 보이게 한다.
+  let swRefreshed = false;
+  navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+    if(swRefreshed) return;
+    swRefreshed = true;
+    location.reload();
+  });
 }
 </script>
 </body>
