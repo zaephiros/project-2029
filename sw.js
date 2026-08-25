@@ -12,12 +12,24 @@
    v3에서 바뀐 점: v2의 "네트워크 우선"이 실제로는 브라우저의 일반 HTTP 캐시(및
    GitHub Pages CDN 캐시)에서 응답을 그대로 받아와 버리는 경우가 있어서, index.html을
    새로 올려도 새로고침을 여러 번 해도 예전 화면이 계속 보이는 문제가 있었다. index.html
-   요청에 { cache: 'no-store' }를 강제로 붙여서 항상 서버까지 진짜로 새로 요청하도록 했다. */
-const CACHE = 'golf-diary-v3';
+   요청에 { cache: 'no-store' }를 강제로 붙여서 항상 서버까지 진짜로 새로 요청하도록 했다.
+
+   v4에서 바뀐 점: 아이폰 등에서 홈 화면에 설치한 앱은 Safari(브라우저)와 완전히 분리된
+   자기만의 저장공간을 쓴다 — 그래서 "브라우저 캐시를 지워주세요"라고 안내해도 홈 화면
+   앱 쪽은 전혀 영향을 안 받는 경우가 있었다. 그래서 사용자가 수동으로 캐시를 지우게
+   만드는 대신, 앱이 스스로 새 버전을 감지하면 자동으로 새로고침까지 하도록 index.html
+   쪽에 로직을 추가했고(reg.update(), controllerchange → location.reload()), 여기서는
+   그 로직이 새 서비스워커를 즉시 활성화할 수 있도록 SKIP_WAITING 메시지를 받으면
+   self.skipWaiting()을 호출하게 했다. */
+const CACHE = 'golf-diary-v4';
 const ASSETS = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
