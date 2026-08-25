@@ -490,11 +490,13 @@ function renderReview(){
 }
 
 /* ======================= STAT (3-2) ======================= */
-let statPeriod = null; // 선택된 기간 — 'all'(전체 기간) 또는 연도 숫자. null이면 첫 렌더 때 currentYear()로 채움
-let statMonth = null;  // 드릴다운된 월 (null이면 월별 스코어 화면, 값이 있으면 일자별 화면)
+let statFromYear = null; // 선택된 기간의 시작 연도. null이면 첫 렌더 때 currentYear()로 채움
+let statToYear = null;   // 선택된 기간의 끝 연도 (from===to면 특정 한 해, from<to면 그 사이 전체 구간)
+let statMonth = null;    // 드릴다운된 월 (null이면 월별 스코어 화면, 값이 있으면 일자별 화면)
 
 // 최근 연도가 앞에 오도록(내림차순) 정렬하되, 아직 오지 않은(현재 연도보다 큰) 연도는
 // 항상 맨 뒤로 보낸다 — "최근이 먼저, 미래는 나중에"라는 순서 요청에 맞춘 것.
+// (연도별 라운드 수 차트처럼 "쭉 훑어보는" 용도에 쓴다.)
 function orderedYears(){
   const ys = yearsAvailable();
   const cy = currentYear();
@@ -502,16 +504,22 @@ function orderedYears(){
   const future = ys.filter(y=>y>cy).sort((a,b)=>a-b);
   return past.concat(future);
 }
-// STAT 화면의 "기간" 선택지 — "전체 기간" + 연도별(1년 단위) 선택지.
-// 예전엔 연도만 고를 수 있었는데, 전체 기간을 보고 싶을 때도 매번 "전체 요약" 카드를
-// 따로 봐야 해서 화면이 복잡했다. 이제 이 선택 하나로 모든 카드가 "전체" 또는
-// "그 해 1년" 기준으로 통일되게 바뀐다.
-function periodsAvailable(){
-  return ['all', ...orderedYears()];
+// From/To 구간 선택 드롭다운용 — 오래된 연도부터 오름차순 (구간을 고를 땐 이 순서가 자연스럽다).
+function yearsAscending(){
+  return yearsAvailable().slice().sort((a,b)=>a-b);
 }
-function roundsForPeriod(period){
-  if(period==='all') return allRoundsFlat();
-  return STATE.data.years[period] || [];
+// STAT 화면의 "기간(From~To)" 선택 — 예전엔 연도 하나씩만 고를 수 있었는데, "22년부터
+// 24년까지"처럼 여러 해를 걸친 구간을 보고 싶다는 요청에 맞춰 시작 연도·끝 연도 두 개를
+// 고르는 방식으로 바꿨다. From===To면 그 해 1년만, From<To면 그 사이 모든 연도를 합쳐서 본다.
+function roundsForRange(fromY, toY){
+  if(!STATE.data || !STATE.data.years) return [];
+  const lo = Math.min(fromY, toY), hi = Math.max(fromY, toY);
+  let out = [];
+  Object.keys(STATE.data.years).forEach(y=>{
+    const yy = Number(y);
+    if(yy>=lo && yy<=hi) (STATE.data.years[y]||[]).forEach(r=>out.push(r));
+  });
+  return out;
 }
 function computeYearlySeries(){
   const rows = [];
@@ -552,9 +560,9 @@ function scoreHistogram(rounds){
   return Object.keys(buckets).sort((a,b)=>parseInt(a)-parseInt(b)).map(k=>({label:k, value:buckets[k]}));
 }
 // 월별 평균 스코어. 최근 달이 먼저 오도록 역순 정렬.
-// period가 'all'이면 여러 연도를 합쳐 "몇 월에 평균이 어땠는지"를 보여준다.
-function monthlyScores(period){
-  const rounds = roundsForPeriod(period);
+// 구간이 여러 해에 걸치면 같은 달을 여러 연도에서 합쳐서 "몇 월에 평균이 어땠는지"를 보여준다.
+function monthlyScores(fromY, toY){
+  const rounds = roundsForRange(fromY, toY);
   const byMonth = {};
   rounds.forEach(r=>{ (byMonth[r.month] = byMonth[r.month]||[]).push(r.level); });
   return Object.keys(byMonth).map(Number).sort((a,b)=>b-a).map(m=>{
@@ -563,21 +571,23 @@ function monthlyScores(period){
     return {key:m, label:m+'월', value:Math.round(avg*10)/10, count:levels.length};
   });
 }
-// 특정 기간(연도 또는 전체)·월의 일자별 스코어. 최근 날짜가 먼저 오도록 역순 정렬.
-// 전체 기간일 땐 같은 날짜가 여러 연도에 걸쳐 겹칠 수 있어 라벨에 연도(뒤 2자리)를 함께 표시한다.
-function dailyScores(period, month){
-  return roundsForPeriod(period).filter(r=>r.month===month)
+// 특정 기간(From~To)·월의 일자별 스코어. 최근 날짜가 먼저 오도록 역순 정렬.
+// 구간이 여러 해에 걸치면 같은 날짜가 연도별로 겹칠 수 있어 라벨에 연도(뒤 2자리)를 함께 표시한다.
+function dailyScores(fromY, toY, month){
+  const multiYear = fromY !== toY;
+  return roundsForRange(fromY, toY).filter(r=>r.month===month)
     .slice().sort((a,b)=>(b.year-a.year)||(b.day-a.day))
-    .map(r=>({key:r.rowIndex, label: period==='all' ? (String(r.year).slice(2)+'.'+r.day+'일') : (r.day+'일'), value:r.level}));
+    .map(r=>({key:r.rowIndex, label: multiYear ? (String(r.year).slice(2)+'.'+r.day+'일') : (r.day+'일'), value:r.level}));
 }
-// 선택한 기간(연도 또는 전체)의 라운드를 최근 날짜가 위로 오도록 역순 정렬
+// 선택한 기간(From~To)의 라운드를 최근 날짜가 위로 오도록 역순 정렬
 // (다른 STAT 차트와 방향 통일). 최근 N개(기본 10개)만 보여준다 — 한 해 전체를 나열하면
 // 카드가 너무 길어져서, 최근 흐름만 보고 싶을 때는 이게 더 보기 편하다는 피드백에 맞춰
-// 개수를 제한했다. 전체 기간에서는 연도까지 포함한 날짜로 표시한다.
-function yearTrend(period, limit){
-  const all = roundsForPeriod(period).slice()
+// 개수를 제한했다. 여러 해에 걸친 구간에서는 연도까지 포함한 날짜로 표시한다.
+function yearTrend(fromY, toY, limit){
+  const multiYear = fromY !== toY;
+  const all = roundsForRange(fromY, toY).slice()
     .sort((a,b)=>(b.year-a.year)||(b.month-a.month)||(b.day-a.day)||(b.no-a.no))
-    .map(r=>({date: period==='all' ? (String(r.year).slice(2)+'.'+r.month+'/'+r.day) : (r.month+'/'+r.day), place:r.place, value:r.level}));
+    .map(r=>({date: multiYear ? (String(r.year).slice(2)+'.'+r.month+'/'+r.day) : (r.month+'/'+r.day), place:r.place, value:r.level}));
   return limit ? all.slice(0, limit) : all;
 }
 // 요일별 평균 스코어. 월화수목금토일 순으로 정렬(데이터가 있는 요일만).
@@ -608,27 +618,35 @@ function stdDev(nums){
 }
 
 function renderStat(){
-  if(statPeriod===null) statPeriod = currentYear();
-  const periods = periodsAvailable();
-  const periodOpts = periods.map(p=>{
-    const isAll = p==='all';
-    const val = isAll ? 'all' : String(p);
-    const label = isAll ? '전체 기간' : p+'년';
-    const selected = isAll ? (statPeriod==='all') : (Number(p)===statPeriod);
-    return `<option value="${val}" ${selected?'selected':''}>${label}</option>`;
-  }).join('');
+  const ys = yearsAscending();
+  const cy = currentYear();
+  if(statFromYear===null) statFromYear = ys.includes(cy) ? cy : (ys.length ? ys[ys.length-1] : cy);
+  if(statToYear===null) statToYear = statFromYear;
+  // 셀렉트가 잘못된 조합(from > to)을 만들지 않도록 항상 정렬해서 쓴다.
+  const fromY = Math.min(statFromYear, statToYear);
+  const toY = Math.max(statFromYear, statToYear);
+  const fromOpts = ys.map(y=>`<option value="${y}" ${y===fromY?'selected':''}>${y}년</option>`).join('');
+  const toOpts = ys.map(y=>`<option value="${y}" ${y===toY?'selected':''}>${y}년</option>`).join('');
+  const rangeControlHtml = (fromId, toId, allId) => `
+    <div class="search-row" style="margin-bottom:10px; align-items:center; gap:6px;">
+      <select id="${fromId}">${fromOpts}</select>
+      <span style="color:var(--text-muted);">~</span>
+      <select id="${toId}">${toOpts}</select>
+      <span class="more-link" id="${allId}" style="margin-left:auto;">전체</span>
+    </div>`;
   const series = computeYearlySeries();
-  const periodLabel = statPeriod==='all' ? '전체' : `${statPeriod}년`;
+  const isFullRange = ys.length>0 && fromY===ys[0] && toY===ys[ys.length-1];
+  const periodLabel = isFullRange ? '전체' : (fromY===toY ? `${fromY}년` : `${fromY}~${toY}년`);
 
   let monthBody;
   if(statMonth===null){
-    const monthly = monthlyScores(statPeriod);
+    const monthly = monthlyScores(fromY, toY);
     monthBody = monthly.length
       ? `<div class="chart-wrap">${hScoreBarChartSVG(monthly.map(m=>({label:m.label,value:m.value,key:m.key,suffix:`${m.value} · ${m.count}회`})), {color:'var(--blue)', dataAttr:'data-stat-month'})}</div>
          <div class="legend"><span>항목을 탭하면 일자별로 볼 수 있어요</span></div>`
       : '<div class="empty">해당 기간 기록이 없습니다.</div>';
   } else {
-    const daily = dailyScores(statPeriod, statMonth);
+    const daily = dailyScores(fromY, toY, statMonth);
     monthBody = `
       <div class="more-link" id="statBackToMonths">← ${periodLabel} 월별로 돌아가기</div>
       ${daily.length
@@ -636,19 +654,19 @@ function renderStat(){
         : '<div class="empty">기록이 없습니다.</div>'}`;
   }
 
-  const pRounds = roundsForPeriod(statPeriod);
+  const pRounds = roundsForRange(fromY, toY);
   // 선택된 기간에 실제 라운드 데이터가 없으면(예: 아직 오지 않은 미래 연도) 빈 상태로
   // 보여줘야 한다. 예전엔 이럴 때 전체 데이터로 대신 채워서 보여줬는데, 그러면
   // "OO년 스코어 분포"라는 제목 밑에 사실은 전혀 다른(전체) 데이터가 나오는 버그가 있었다.
   const freq = courseFrequency(pRounds);
   const hist = scoreHistogram(pRounds);
   const weekday = weekdayScores(pRounds);
-  // "최근 10개"는 지금 한창 진행 중인 올해(currentYear())를 볼 때만 의미가 있다.
-  // 전체 기간이거나 이미 다 끝난 지난 연도는 최근 10개만 잘라 보여줄 이유가 없어서
-  // 해당 기간 전체를 보여준다.
-  const isOngoingYear = statPeriod !== 'all' && statPeriod === currentYear();
-  const TREND_LIMIT = isOngoingYear ? 10 : null;
-  const trend = yearTrend(statPeriod, TREND_LIMIT);
+  // "최근 10개"는 지금 한창 진행 중인 올해(currentYear()) 딱 한 해만 볼 때만 의미가 있다.
+  // 여러 해를 걸친 구간이거나 이미 다 끝난 지난 연도는 최근 10개만 잘라 보여줄 이유가
+  // 없어서 해당 기간 전체를 보여준다.
+  const isSingleOngoingYear = fromY===toY && fromY===cy;
+  const TREND_LIMIT = isSingleOngoingYear ? 10 : null;
+  const trend = yearTrend(fromY, toY, TREND_LIMIT);
   const trendValues = trend.map(d=>d.value);
   const trendAvg = average(trendValues);
   const trendSd = stdDev(trendValues);
@@ -656,10 +674,8 @@ function renderStat(){
 
   return `
   <div class="card">
-    <h2>스코어 추이 (${isOngoingYear?'최근 ':'전체 '}${trend.length}개)</h2>
-    <div class="search-row" style="margin-bottom:10px;">
-      <select id="statTrendPeriodSel">${periodOpts}</select>
-    </div>
+    <h2>스코어 추이 (${isSingleOngoingYear?'최근 ':'전체 '}${trend.length}개)</h2>
+    ${rangeControlHtml('statTrendFromSel','statTrendToSel','statTrendRangeAll')}
     ${trend.length ? `
       <div class="stat-tiles" style="margin-bottom:10px;">
         <div class="tile"><div class="v">${fmtAvg(trendAvg)}</div><div class="l">평균</div></div>
@@ -671,9 +687,7 @@ function renderStat(){
   </div>
   <div class="card">
     <h2>월별 스코어${statMonth?` · ${statMonth}월`:''}</h2>
-    <div class="search-row" style="margin-bottom:10px;">
-      <select id="statPeriodSel">${periodOpts}</select>
-    </div>
+    ${rangeControlHtml('statFromSel','statToSel','statRangeAll')}
     ${monthBody}
   </div>
   <div class="card">
@@ -698,7 +712,11 @@ function renderStat(){
    STAT 화면의 모든 차트를 "왼쪽에 라벨, 그 옆으로 막대가 뻗어나가는" 가로 막대 형태로
    통일했다 — 차트마다 제각각(세로 막대/가로 막대 혼재)이던 걸 하나의 이미지 언어로
    맞추면서, 막대가 카드 폭 전체(가장 큰 값 기준)를 쓰기 때문에 값 차이도 더 뚜렷하게
-   보인다. 막대는 항상 같은 x좌표(padL)에서 시작해 왼쪽 정렬이 유지된다. */
+   보인다. 막대는 항상 같은 x좌표(STAT_PAD_L)에서 시작해서, 카드마다 라벨 길이가
+   달라도(연도/월/요일/코스 이름 등) 스크롤해서 내려봤을 때 막대 시작 위치가 전부
+   맞춰지도록 통일했다 — 예전엔 차트마다 padL 값이 제각각(96/112/158)이라 유독
+   "자주 간 코스" 카드만 막대가 오른쪽으로 밀려 보이는 문제가 있었다. */
+const STAT_PAD_L = 128;
 // 개수/빈도 계열(연도별 라운드 수, 스코어 분포, 자주 간 코스 등) — 값이 클수록 막대가 길다.
 // opts.dataAttr 을 주면 각 행 <g>에 해당 속성(예: data-stat-month="7")을 달아서
 // afterRender에서 클릭을 잡아 드릴다운할 수 있게 한다.
@@ -706,7 +724,7 @@ function hCountBarChartSVG(data, opts){
   opts = opts||{};
   if(!data.length) return '<div class="empty">기록이 없습니다.</div>';
   const w = 420, rowH = opts.rowH || 40;
-  const padL = opts.padL || 96, padR = opts.padR || 86;
+  const padL = opts.padL || STAT_PAD_L, padR = opts.padR || 86;
   const h = data.length*rowH + 10;
   const max = Math.max(1, ...data.map(d=>d.value));
   const barTrack = w - padL - padR;
@@ -736,7 +754,7 @@ function hScoreBarChartSVG(data, opts){
   opts = opts||{};
   if(!data.length) return '<div class="empty">기록이 없습니다.</div>';
   const w = 420, rowH = opts.rowH || 40, topOffset = 22;
-  const padL = opts.padL || 96, padR = opts.padR || 104;
+  const padL = opts.padL || STAT_PAD_L, padR = opts.padR || 104;
   const h = topOffset + data.length*rowH + 6;
   const barTrack = w - padL - padR;
   const maxVal = Math.max(PAR_SCORE+8, ...data.map(d=>d.value)); // 최악(가장 나쁜) 스코어 쪽 끝
@@ -776,7 +794,7 @@ function scoreRowChartSVG(data, opts){
   opts = opts||{};
   if(!data.length) return '<div class="empty">기록이 없습니다.</div>';
   const w = 420, rowH = 48, padTop = 10;
-  const padL = 112, padR = 140;
+  const padL = STAT_PAD_L, padR = 140;
   const h = padTop + data.length*rowH + 8;
   const barMax = w - padL - padR;
   // 파(72) 같은 고정 기준선 없이, 지금 보이는 라운드들 안에서 제일 좋은/나쁜 스코어를
@@ -800,7 +818,7 @@ function scoreRowChartSVG(data, opts){
 }
 function hBarChartSVG(data, opts){
   opts = opts||{};
-  const w = 420, rowH = 44, padL = 158, padR = 120;
+  const w = 420, rowH = 44, padL = STAT_PAD_L, padR = 120;
   const h = data.length*rowH + 12;
   const max = Math.max(1, ...data.map(d=>d.value));
   let rows = data.map((d,i)=>{
@@ -883,12 +901,29 @@ function afterRender(hash){
     }
   }
   if(hash.startsWith('#stat')){
-    // "스코어 추이"와 "월별 스코어" 두 카드가 같은 statPeriod를 공유한다 —
-    // 어느 쪽 기간 선택을 바꿔도 둘 다 같은 기간으로 같이 바뀐다.
-    ['statTrendPeriodSel','statPeriodSel'].forEach(id=>{
-      const sel = document.getElementById(id);
-      if(sel) sel.addEventListener('change', ()=>{
-        statPeriod = sel.value==='all' ? 'all' : parseInt(sel.value, 10);
+    // "스코어 추이"와 "월별 스코어" 두 카드가 같은 From~To 구간을 공유한다 —
+    // 어느 쪽에서 시작/끝 연도를 바꿔도 둘 다 같은 기간으로 같이 바뀐다.
+    [['statTrendFromSel','statTrendToSel'], ['statFromSel','statToSel']].forEach(([fromId,toId])=>{
+      const fromSel = document.getElementById(fromId);
+      const toSel = document.getElementById(toId);
+      if(fromSel) fromSel.addEventListener('change', ()=>{
+        statFromYear = parseInt(fromSel.value, 10);
+        statMonth = null;
+        render();
+      });
+      if(toSel) toSel.addEventListener('change', ()=>{
+        statToYear = parseInt(toSel.value, 10);
+        statMonth = null;
+        render();
+      });
+    });
+    ['statTrendRangeAll','statRangeAll'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) el.addEventListener('click', ()=>{
+        const ys = yearsAscending();
+        if(!ys.length) return;
+        statFromYear = ys[0];
+        statToYear = ys[ys.length-1];
         statMonth = null;
         render();
       });
