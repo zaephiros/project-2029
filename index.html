@@ -414,7 +414,7 @@ function renderHome(){
       <div class="round-date">${fmtDate(r.month,r.day)}</div>
       <div class="round-place">${esc(r.place)}</div>
       ${r.code ? `<span class="code-badge">${esc(r.code)}</span>` : ''}
-      ${r.member ? `<span class="member-badge" title="${esc(r.member)}">${esc(truncateLabel(r.member,14))}</span>` : ''}
+      ${isPlausibleMember(r.member) ? `<span class="member-badge" title="${esc(r.member)}">${esc(truncateLabel(r.member,14))}</span>` : ''}
       ${r._pending ? `<span class="chip chip-pending">입력필요</span>` : `<span class="chip ${scoreChipClass(r.level, st.avg)}">${r.level}</span>`}
     </div>`).join('') : '<div class="empty">아직 기록된 라운드가 없습니다.</div>';
 
@@ -437,7 +437,7 @@ function renderHome(){
             <span class="date">${u.year}.${String(u.month).padStart(2,'0')}.${String(u.day).padStart(2,'0')}</span>
             <span class="place">${esc(u.place)}</span>
             ${u.code ? `<span class="code-badge">${esc(u.code)}</span>` : ''}
-            ${u.member ? `<span class="member-badge" title="${esc(u.member)}">${esc(truncateLabel(u.member,14))}</span>` : ''}
+            ${isPlausibleMember(u.member) ? `<span class="member-badge" title="${esc(u.member)}">${esc(truncateLabel(u.member,14))}</span>` : ''}
           </div>
           ${u.review ? `<div class="note">${esc(u.review)}</div>` : ''}
         </div>`).join('') : '<div class="empty" style="padding:6px 0 4px;">예정된 라운드가 없습니다. 우측 하단 ＋ 버튼으로 추가해보세요.</div>'}
@@ -472,7 +472,7 @@ function renderReview(){
         <span class="place">${esc(r.place)}</span>
         <span class="chip ${scoreChipClass(r.level, null)}">${r.level}</span>
         ${r.code ? `<span class="code-badge">${esc(r.code)}</span>` : ''}
-        ${r.member ? `<span class="member-badge" title="${esc(r.member)}">${esc(truncateLabel(r.member,14))}</span>` : ''}
+        ${isPlausibleMember(r.member) ? `<span class="member-badge" title="${esc(r.member)}">${esc(truncateLabel(r.member,14))}</span>` : ''}
         <span class="edit-link" data-edit-round="${r.year}|${r.rowIndex}">✏ 수정</span>
       </div>
       ${hasReview ? `
@@ -754,19 +754,17 @@ function hCountBarChartSVG(data, opts){
 // 좋을수록(작을수록) 길게. 이러면 "길수록 좋다"는 평소 감각 그대로 읽히면서, 숫자 자체는
 // 왜곡 없이 진짜 스코어를 보여준다.
 //
-// 막대 길이 공식: 1/log(타수). 65~105타를 기준 범위로 못박아두고 그 안에서 정규화한다 —
+// 막대 길이 공식: 65~105타를 기준 범위로 못박아두고 그 안에서 직선(비례)으로 정규화한다.
 // 예전엔 "지금 화면에 보이는 데이터 중 최고/최악"을 기준으로 매번 척도가 바뀌었는데, 그러면
 // 카드마다·기간을 바꿀 때마다 같은 88타가 어떤 땐 길게, 어떤 땐 짧게 보여서 비교가 어려웠다.
 // 65~105라는 고정된 현실적 범위로 정규화하면 어디서 봐도 같은 스코어는 항상 같은 길이로
-// 보인다. 1/log는 타수가 좋을수록(작을수록) 값이 가파르게 커지는 곡선이라, 단순 직선 비례보다
-// 잘 친 라운드들 사이의 차이가 화면에서 더 도드라져 보인다.
+// 보인다. (한때 1/log(타수) 곡선을 써봤는데, 좋은 스코어 쪽 차이는 더 크게 보이지만 그만큼
+// 나쁜 스코어 쪽은 차이가 눌려서 "갭이 균일하지 않다"는 피드백을 받아 직선 비례로 되돌렸다 —
+// 1타 차이는 스코어 구간에 상관없이 항상 똑같은 길이 차이로 보인다.)
 const SCORE_SCALE_MIN = 65, SCORE_SCALE_MAX = 105;
 function scoreBarFrac(score){
   const s = Math.min(Math.max(Number(score), SCORE_SCALE_MIN), SCORE_SCALE_MAX); // 범위 밖 값은 안전하게 clamp
-  const val = 1 / Math.log(s);
-  const valBest = 1 / Math.log(SCORE_SCALE_MIN);   // 65타 → 가장 큰 값 → 막대가 꽉 찬다(1)
-  const valWorst = 1 / Math.log(SCORE_SCALE_MAX);  // 105타 → 가장 작은 값 → 막대가 거의 없다(0)
-  return (val - valWorst) / (valBest - valWorst);
+  return (SCORE_SCALE_MAX - s) / (SCORE_SCALE_MAX - SCORE_SCALE_MIN); // 65타→1(꽉 참), 105타→0
 }
 function hScoreBarChartSVG(data, opts){
   opts = opts||{};
@@ -795,13 +793,23 @@ function truncateLabel(s, n){
   s = String(s==null?'':s);
   return s.length>n ? s.slice(0,n)+'…' : s;
 }
+// "멤버" 칸은 원래 "재우·호성"처럼 짧은 이름 나열용이다. 그런데 아직 구글시트에 H열을
+// 새로 안 만든 상태에서는, 예전부터 그 자리(또는 그 근처)에 있던 다른 용도의 긴 텍스트가
+// 그대로 읽혀서 뱃지에 노출되는 문제가 있었다 — 잘라서(…) 보여줘도 "왜 자꾸 나오냐"는
+// 피드백을 받아서, 아예 이 길이를 넘는 값은 멤버 뱃지 자체를 안 그리기로 했다. 실제 멤버
+// 이름 목록은 이 정도 길이를 넘을 일이 거의 없으니, 길게 나오는 건 대부분 진짜 멤버 데이터가
+// 아니라는 뜻이다. 시트의 해당 칸을 정리하고 짧은 이름으로 다시 입력하면 정상적으로 보인다.
+const MEMBER_BADGE_MAX_LEN = 20;
+function isPlausibleMember(m){
+  return !!(m && String(m).trim().length > 0 && String(m).trim().length <= MEMBER_BADGE_MAX_LEN);
+}
 // 선택한 연도의 라운드를 위(최근)에서 아래(예전)로 한 줄씩 나열하는 스코어 추이.
 // 예전엔 가로로 긴 점선그래프였는데, 폰 화면에서 옆으로 잘려 잘 안 보인다는 피드백을 받아
 // x/y축을 맞바꿔서 세로로 이어지는 형태로 바꿨다 — 줄 수가 많아지면 카드 자체가 길어지고
 // 페이지를 아래로 스크롤해서 보면 된다 (가로 스크롤이 필요 없어졌다).
-// 숫자는 실제 스코어 그대로 표시하고, 막대 길이만 scoreBarFrac(1/log(타수), 65~105 고정
-// 범위)로 매핑한다 — 다른 STAT 카드(월별/일별/요일별 평균 스코어)와 같은 척도를 써서, 여기
-// 저기서 봐도 같은 스코어는 항상 같은 길이의 막대로 보인다.
+// 숫자는 실제 스코어 그대로 표시하고, 막대 길이만 scoreBarFrac(65~105 고정 범위 안에서
+// 직선 비례)로 매핑한다 — 다른 STAT 카드(월별/일별/요일별 평균 스코어)와 같은 척도를 써서,
+// 여기저기서 봐도 같은 스코어는 항상 같은 길이의 막대로 보인다.
 function scoreRowChartSVG(data, opts){
   opts = opts||{};
   if(!data.length) return '<div class="empty">기록이 없습니다.</div>';
@@ -868,7 +876,7 @@ function renderMemories(){
           <span class="place">${esc(r.place)}</span>
           <span class="chip ${scoreChipClass(r.level,null)}">${r.level}</span>
           ${r.code ? `<span class="code-badge">${esc(r.code)}</span>` : ''}
-          ${r.member ? `<span class="member-badge" title="${esc(r.member)}">${esc(truncateLabel(r.member,14))}</span>` : ''}
+          ${isPlausibleMember(r.member) ? `<span class="member-badge" title="${esc(r.member)}">${esc(truncateLabel(r.member,14))}</span>` : ''}
           <span class="edit-link" data-edit-round="${r.year}|${r.rowIndex}">✏ 수정</span>
         </div>
         ${r.review ? `<div class="review-text ${expanded?'':'clamp'}">${esc(r.review)}</div>
