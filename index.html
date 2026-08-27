@@ -779,26 +779,45 @@ function scoreBarFrac(score){
   const raw = (SCORE_SCALE_MAX - s) / (SCORE_SCALE_MAX - SCORE_SCALE_MIN) * SCORE_SCALE_SENSITIVITY;
   return Math.min(Math.max(raw, 0), 1);
 }
+// "평균 스코어"(월별/일별/요일별)는 개별 라운드 원점수(스코어 추이)와 다른 척도를 쓴다.
+// 여러 라운드가 섞여 상쇄되는 평균은 개별 스코어보다 훨씬 좁은 폭 안에서만 움직이는데,
+// 그 좁은 움직임 안에서도 "0.1타 줄이는 것도 쉽지 않다"는 걸 체감시켜달라는 요청을 받아,
+// 개별 스코어 폭(82~99, 17타)보다 훨씬 좁은 4타 폭으로 평균 전용 척도를 만들었다. 처음엔
+// 개별 스코어의 "1타"에 정확히 대응하도록 1/10인 1.7타 폭으로 만들어봤는데, 그러면 실제
+// 월별/요일별 평균(81~92타 정도로 퍼짐)이 거의 다 양 끝(꽉 참/거의 빈)에 못박혀서 오히려
+// 구분이 안 되는 문제가 있었다 — 그래서 실제 평균들이 대부분 이 범위 안에 들어오도록
+// 4타 폭으로 넓혔다. 중심은 최근 시즌 평균(약 87타) 근처로 잡았다. (평균값이 실제로 이
+// 중심에서 자주 크게 벗어난다면 AVG_SCALE_CENTER를 조정해달라고 말씀해주시면 됩니다.)
+const AVG_SCALE_CENTER = 87, AVG_SCALE_HALF_WIDTH = 2; // 총 폭 4타
+const AVG_SCALE_MIN = AVG_SCALE_CENTER - AVG_SCALE_HALF_WIDTH, AVG_SCALE_MAX = AVG_SCALE_CENTER + AVG_SCALE_HALF_WIDTH;
+function avgBarFrac(avg){
+  const v = Math.min(Math.max(Number(avg), AVG_SCALE_MIN), AVG_SCALE_MAX);
+  return (AVG_SCALE_MAX - v) / (AVG_SCALE_MAX - AVG_SCALE_MIN);
+}
+// 라벨(월/일/요일)과 값을 막대 "위 줄"에 따로 쓰고, 막대는 그 아래 줄에서 카드 폭을 거의
+// 그대로 다 쓴다 — 예전엔 라벨(왼쪽)·막대(가운데)·값(오른쪽)을 한 줄에 나란히 놓다 보니
+// 막대가 쓸 수 있는 폭이 카드 폭의 절반도 안 됐는데(128~104를 뺀 나머지), 두 줄로 나누니
+// 막대 폭이 거의 2배 이상으로 늘어나서 같은 비율 차이라도 픽셀상 훨씬 크게, 더 극명하게
+// 보인다. (이 카드들은 이제 STAT_PAD_L 기준 정렬에서는 빠진다 — 연도별 라운드 수·자주 간
+// 코스처럼 개수를 세는 차트는 그대로 왼쪽 정렬을 유지한다.)
 function hScoreBarChartSVG(data, opts){
   opts = opts||{};
   if(!data.length) return '<div class="empty">기록이 없습니다.</div>';
-  const w = 420, rowH = opts.rowH || 40, topOffset = 6;
-  const padL = opts.padL || STAT_PAD_L, padR = opts.padR || 104;
-  const h = topOffset + data.length*rowH + 6;
-  const barTrack = w - padL - padR;
-  const barYOff = (rowH-4)/2 - STAT_BAR_H/2; // 라벨 글씨가 있던 세로 중심에 막대 두께만 새 값으로 맞춘다
+  const w = 420, rowH = opts.rowH || 56, m = 4, topOffset = 6;
+  const h = topOffset + data.length*rowH + 4;
+  const barTrack = w - m*2;
   const rows = data.map((d,i)=>{
     const y = topOffset + i*rowH;
-    const raw = scoreBarFrac(d.value) * barTrack; // 스코어가 좋을수록(작을수록) 막대가 길게 뻗는다
+    const raw = avgBarFrac(d.value) * barTrack; // 스코어가 좋을수록(작을수록) 막대가 길게 뻗는다
     const bw = Math.max(raw, 3);
     const suffix = d.suffix!=null ? d.suffix : d.value;
     const clickable = opts.dataAttr && d.key!=null;
     const attrs = clickable ? ` ${opts.dataAttr}="${esc(d.key)}" class="bar-click"` : '';
     return `<g${attrs}>
-      <rect x="0" y="${y}" width="${w}" height="${rowH-4}" fill="transparent"/>
-      <text x="${padL-10}" y="${y+(rowH-4)/2+5}" text-anchor="end" font-size="14" fill="var(--text-secondary)">${esc(truncateLabel(String(d.label),7))}</text>
-      <rect x="${padL}" y="${y+barYOff}" width="${bw}" height="${STAT_BAR_H}" rx="4" fill="${opts.color||'var(--blue)'}"/>
-      <text x="${padL+bw+8}" y="${y+(rowH-4)/2+5}" font-size="14" fill="var(--text-muted)">${suffix}</text>
+      <rect x="0" y="${y}" width="${w}" height="${rowH-6}" fill="transparent"/>
+      <text x="${m}" y="${y+14}" font-size="14" font-weight="600" fill="var(--text-secondary)">${esc(truncateLabel(String(d.label),12))}</text>
+      <text x="${w-m}" y="${y+14}" text-anchor="end" font-size="13" fill="var(--text-muted)">${suffix}</text>
+      <rect x="${m}" y="${y+22}" width="${bw}" height="${STAT_BAR_H}" rx="4" fill="${opts.color||'var(--blue)'}"/>
     </g>`;
   }).join('');
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block;">${rows}</svg>`;
@@ -821,26 +840,25 @@ function isPlausibleMember(m){
 // 예전엔 가로로 긴 점선그래프였는데, 폰 화면에서 옆으로 잘려 잘 안 보인다는 피드백을 받아
 // x/y축을 맞바꿔서 세로로 이어지는 형태로 바꿨다 — 줄 수가 많아지면 카드 자체가 길어지고
 // 페이지를 아래로 스크롤해서 보면 된다 (가로 스크롤이 필요 없어졌다).
-// 숫자는 실제 스코어 그대로 표시하고, 막대 길이만 scoreBarFrac(65~105 고정 범위 안에서
-// 직선 비례)로 매핑한다 — 다른 STAT 카드(월별/일별/요일별 평균 스코어)와 같은 척도를 써서,
-// 여기저기서 봐도 같은 스코어는 항상 같은 길이의 막대로 보인다.
+// 숫자는 실제 스코어 그대로 표시하고, 막대 길이만 scoreBarFrac(고정 범위 안에서 직선 비례)로
+// 매핑한다 — 다른 STAT 카드(월별/일별/요일별 평균 스코어)와 같은 척도를 써서, 여기저기서
+// 봐도 같은 스코어는 항상 같은 길이의 막대로 보인다. 날짜/장소·스코어를 막대 위 줄에 따로
+// 쓰고 막대는 그 아래 줄에서 카드 폭을 거의 그대로 다 써서, 차이가 더 극명하게 보인다.
 function scoreRowChartSVG(data, opts){
   opts = opts||{};
   if(!data.length) return '<div class="empty">기록이 없습니다.</div>';
-  const w = 420, rowH = 48, padTop = 10;
-  const padL = STAT_PAD_L, padR = 140;
-  const h = padTop + data.length*rowH + 8;
-  const barMax = w - padL - padR;
+  const w = 420, rowH = 56, m = 4, padTop = 6;
+  const h = padTop + data.length*rowH + 4;
+  const barMax = w - m*2;
   const color = opts.color || 'var(--blue)';
 
-  const barYOff = 21.5 - STAT_BAR_H/2; // 예전 막대 중심(y+11+21/2=y+21.5)에 두께만 새 값으로 맞춘다
   const rows = data.map((d,i)=>{
     const y = padTop + i*rowH;
     const raw = scoreBarFrac(d.value) * barMax; // 좋은(낮은) 스코어일수록 막대가 길다
     const bw = Math.max(raw, 3);
-    return `<text x="${padL-10}" y="${y+22}" text-anchor="end" font-size="15" fill="var(--text-secondary)">${esc(d.date)}</text>
-      <rect x="${padL}" y="${y+barYOff}" width="${bw}" height="${STAT_BAR_H}" rx="4" fill="${color}"/>
-      <text x="${padL+bw+8}" y="${y+22}" font-size="14" fill="var(--text-muted)">${d.value} · ${esc(truncateLabel(d.place,8))}</text>`;
+    return `<text x="${m}" y="${y+14}" font-size="14" font-weight="600" fill="var(--text-secondary)">${esc(d.date)}</text>
+      <text x="${w-m}" y="${y+14}" text-anchor="end" font-size="13" fill="var(--text-muted)">${d.value} · ${esc(truncateLabel(d.place,10))}</text>
+      <rect x="${m}" y="${y+22}" width="${bw}" height="${STAT_BAR_H}" rx="4" fill="${color}"/>`;
   }).join('');
 
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block;">${rows}</svg>`;
