@@ -156,7 +156,7 @@
   }
   .diary-photos{ display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
   .diary-photos .thumb-wrap{ position:relative; width:52px; height:52px; }
-  .diary-photos img{ width:52px; height:52px; object-fit:cover; border-radius:6px; border:1px solid var(--line); display:block; }
+  .diary-photos img{ width:52px; height:52px; object-fit:cover; border-radius:6px; border:1px solid var(--line); display:block; cursor:pointer; }
   .diary-photos .thumb-del{
     position:absolute; top:-5px; right:-5px; width:16px; height:16px; border-radius:50%; background:var(--brick);
     color:#fff; font-size:10px; line-height:16px; text-align:center; cursor:pointer; border:1.5px solid var(--paper);
@@ -224,6 +224,13 @@
 
   /* modal */
   #modal-bg{ position:fixed; inset:0; background:rgba(36,31,26,.55); display:none; align-items:center; justify-content:center; z-index:50; padding:20px;}
+  #photo-lightbox{
+    position:fixed; inset:0; background:rgba(20,17,14,.92); display:none; z-index:60;
+    flex-direction:column; align-items:center; justify-content:center; padding:20px; gap:12px;
+  }
+  #photo-lightbox img{ max-width:100%; max-height:75vh; border-radius:8px; }
+  #photo-lightbox-close{ position:absolute; top:16px; right:16px; color:#fff; font-size:14px; font-weight:700; cursor:pointer; padding:8px 12px; background:rgba(255,255,255,.15); border-radius:8px; }
+  #photo-lightbox-link{ color:#fff; font-size:12px; text-decoration:underline; }
   #modal{ background:var(--paper); border-radius:12px; padding:18px; width:100%; max-width:420px; box-shadow:0 10px 30px rgba(0,0,0,.3);}
   #modal h3{ margin:0 0 8px; font-size:15px; }
   #modal textarea{ width:100%; height:140px; font-size:13px; padding:8px; border:1px solid var(--line); border-radius:6px; font-family:inherit; resize:vertical;}
@@ -238,7 +245,7 @@
     width:100%; font-size:11.5px; padding:6px; border:1px solid var(--line); border-radius:6px; background:#fffdf8;
   }
   #modalFields .mf-image-preview{ display:block; max-width:100%; max-height:160px; border-radius:6px; margin-top:6px; border:1px solid var(--line); }
-  #modalFields .mf-image-fallback{ display:block; font-size:11px; color:var(--brick); font-weight:600; margin-top:6px; text-decoration:none; }
+  #modalFields .mf-image-fallback{ display:block; font-size:11px; color:var(--brick); font-weight:600; margin-top:6px; text-decoration:none; cursor:pointer; }
   #modalFields .mf-image-status{ font-size:10.5px; color:var(--stone); margin-top:4px; }
   #modal .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:10px; }
   #modal button{ padding:7px 14px; border-radius:6px; border:none; font-size:12.5px; font-weight:600; cursor:pointer;}
@@ -255,7 +262,7 @@
 <body>
 
 <div style="background:#9C4A34; color:#fff; text-align:center; font-size:12px; padding:5px; font-weight:700; letter-spacing:.02em;">
-  빌드 버전: v4.4 (이미지 로드실패 대체표시) · 2026-08-23
+  빌드 버전: v4.5 (사진 앱내 크게보기로 전환) · 2026-08-23
 </div>
 
 <div id="topbar">
@@ -412,6 +419,12 @@
   </div>
 </div>
 
+<div id="photo-lightbox">
+  <div id="photo-lightbox-close">✕ 닫기</div>
+  <img id="photo-lightbox-img">
+  <a id="photo-lightbox-link" href="#" target="_blank">새 탭에서 열기 ↗</a>
+</div>
+
 <script>
 /* ---------------- storage layer (works offline once the file is opened locally) ---------------- */
 const mem = {};
@@ -525,10 +538,13 @@ function renderDiaryPhotos(person, iso){
   const urls = getDiaryPhotos(person, iso);
   box.innerHTML = urls.map((u,i)=>`
     <div class="thumb-wrap">
-      <a href="${u}" target="_blank"><img src="${u}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2252%22 height=%2252%22><rect width=%2252%22 height=%2252%22 fill=%22%23e5ddc8%22/><text x=%2226%22 y=%2230%22 font-size=%2222%22 text-anchor=%22middle%22>%F0%9F%96%BC%EF%B8%8F</text></svg>';"></a>
+      <img src="${u}" data-url="${u}" class="thumb-open" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2252%22 height=%2252%22><rect width=%2252%22 height=%2252%22 fill=%22%23e5ddc8%22/><text x=%2226%22 y=%2230%22 font-size=%2222%22 text-anchor=%22middle%22>%F0%9F%96%BC%EF%B8%8F</text></svg>';">
       <div class="thumb-del" data-idx="${i}">×</div>
     </div>
   `).join('');
+  box.querySelectorAll('.thumb-open').forEach(el=>{
+    el.addEventListener('click', ()=> openPhotoLightbox(el.dataset.url));
+  });
   box.querySelectorAll('.thumb-del').forEach(el=>{
     el.addEventListener('click', ()=>{
       const idx = parseInt(el.dataset.idx, 10);
@@ -891,7 +907,7 @@ async function handleImageFileSelect(infoKey, fieldKey){
       hiddenEl.value = data.url;
       previewEl.src = data.url;
       const fallbackEl = document.getElementById('mf-'+fieldKey+'-fallback');
-      fallbackEl.href = data.url;
+      fallbackEl.onclick = ()=> openPhotoLightbox(data.url);
       fallbackEl.style.display = 'none';
       // 다이어리처럼 업로드 성공 즉시 자동 저장 (별도로 '저장' 버튼을 안 눌러도 되도록)
       let obj = {};
@@ -934,8 +950,8 @@ function openModal(key,label){
           <div class="mf-image-box">
             <input type="hidden" id="mf-${f.key}" value="${imgUrl.replace(/"/g,'&quot;')}">
             <input type="file" accept="image/*" id="mf-${f.key}-file">
-            <img id="mf-${f.key}-preview" class="mf-image-preview" src="${imgUrl}" style="${imgUrl?'':'display:none;'}" onerror="this.style.display='none'; document.getElementById('mf-${f.key}-fallback').style.display='block';">
-            <a id="mf-${f.key}-fallback" href="${imgUrl}" target="_blank" class="mf-image-fallback" style="display:none;">이미지 미리보기 실패 — 원본 링크 열기 ↗</a>
+            <img id="mf-${f.key}-preview" class="mf-image-preview" src="${imgUrl}" style="${imgUrl?'':'display:none;'} cursor:pointer;" onclick="openPhotoLightbox(this.src)" onerror="this.style.display='none'; document.getElementById('mf-${f.key}-fallback').style.display='block';">
+            <div id="mf-${f.key}-fallback" class="mf-image-fallback" style="display:none;" onclick="openPhotoLightbox('${imgUrl}')">이미지 미리보기 실패 — 탭해서 열기 ↗</div>
             <div class="mf-image-status" id="mf-${f.key}-status"></div>
           </div>
         </div>`;
@@ -975,6 +991,20 @@ function openModal(key,label){
   };
 }
 document.getElementById('modalClose').onclick = ()=> document.getElementById('modal-bg').style.display='none';
+
+/* 사진 크게 보기 — standalone(홈 화면 추가) 앱에서는 target="_blank" 새 탭이 잘 안 열리는 경우가 많아서,
+   새 탭 대신 앱 안에서 바로 크게 보여주는 방식으로 대체 */
+function openPhotoLightbox(url){
+  document.getElementById('photo-lightbox-img').src = url;
+  document.getElementById('photo-lightbox-link').href = url;
+  document.getElementById('photo-lightbox').style.display = 'flex';
+}
+document.getElementById('photo-lightbox-close').addEventListener('click', ()=>{
+  document.getElementById('photo-lightbox').style.display = 'none';
+});
+document.getElementById('photo-lightbox').addEventListener('click', (e)=>{
+  if(e.target.id === 'photo-lightbox') document.getElementById('photo-lightbox').style.display = 'none';
+});
 
 function pullInfoFromSheet(){
   const url = store.get('write_url');
