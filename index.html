@@ -113,7 +113,7 @@
   .round-row{display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:9px;
     cursor:pointer;min-width:0;}
   .round-row:active{transform:scale(0.99);}
-  .round-date{font-size:clamp(11.5px,2.6vw,14px);color:var(--text-muted);width:34px;flex-shrink:0;font-variant-numeric:tabular-nums;}
+  .round-date{font-size:clamp(11.5px,2.6vw,14px);color:var(--text-primary);font-weight:600;width:34px;flex-shrink:0;font-variant-numeric:tabular-nums;}
   .round-place{flex:1;font-size:clamp(13px,3vw,15.5px);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
   .code-badge{font-size:13px;color:var(--text-secondary);border:1px solid var(--border);
     border-radius:6px;padding:1px 6px;flex-shrink:0;background:var(--surface-1);}
@@ -126,6 +126,11 @@
   .chip-warn{background:color-mix(in srgb, var(--yellow) 20%, transparent);color:#8a5c00;}
   .chip-bad{background:color-mix(in srgb, var(--red) 16%, transparent);color:#a12727;}
   .chip-pending{background:transparent;color:var(--text-muted);border:1px dashed var(--baseline);}
+  /* 홈 라운딩 요약의 스코어 숫자 — 이제 행 배경(스코어 막대)이 이미 좋고 나쁨을 색으로
+     보여주기 때문에, 숫자 자체에 또 다른 색(초록/빨강 등) 배지를 겹치지 않고 날짜·구장과
+     같은 톤(텍스트 기본색)의 평범한 글씨로 둔다. */
+  .round-score-plain{font-size:clamp(13px,3vw,15.5px);font-weight:600;color:var(--text-primary);
+    flex-shrink:0;font-variant-numeric:tabular-nums;}
   .empty{color:var(--text-muted);font-size:15px;text-align:center;padding:24px 10px;}
   .btn{border:none;border-radius:10px;padding:9px 14px;font-size:15.5px;font-weight:700;
     cursor:pointer;}
@@ -428,7 +433,7 @@ function renderHome(){
       <div class="round-place">${esc(r.place)}</div>
       ${r.code ? `<span class="code-badge">${esc(r.code)}</span>` : ''}
       ${isPlausibleMember(r.member) ? `<span class="member-badge" title="${esc(r.member)}">${esc(truncateLabel(r.member,14))}</span>` : ''}
-      ${r._pending ? `<span class="chip chip-pending">입력필요</span>` : `<span class="chip ${scoreChipClass(r.level, st.avg)}">${r.level}</span>`}
+      ${r._pending ? `<span class="chip chip-pending">입력필요</span>` : `<span class="round-score-plain">${r.level}</span>`}
     </div>`;
   }).join('') : '<div class="empty">아직 기록된 라운드가 없습니다.</div>';
 
