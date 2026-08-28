@@ -241,8 +241,13 @@
   }
   #modalFields .mf-image-row{ align-items:flex-start; }
   #modalFields .mf-image-box{ flex:1; min-width:0; }
+  #modalFields .mf-image-controls{ display:flex; gap:6px; align-items:center; }
   #modalFields .mf-image-box input[type="file"]{
-    width:100%; font-size:11.5px; padding:6px; border:1px solid var(--line); border-radius:6px; background:#fffdf8;
+    flex:1; min-width:0; font-size:11.5px; padding:6px; border:1px solid var(--line); border-radius:6px; background:#fffdf8;
+  }
+  #modalFields .mf-image-del{
+    flex-shrink:0; font-size:11px; font-weight:700; color:#fff; background:var(--brick);
+    padding:7px 10px; border-radius:6px; cursor:pointer;
   }
   #modalFields .mf-image-preview{ display:block; max-width:100%; max-height:160px; border-radius:6px; margin-top:6px; border:1px solid var(--line); }
   #modalFields .mf-image-fallback{ display:block; font-size:11px; color:var(--brick); font-weight:600; margin-top:6px; text-decoration:none; cursor:pointer; }
@@ -262,7 +267,7 @@
 <body>
 
 <div style="background:#9C4A34; color:#fff; text-align:center; font-size:12px; padding:5px; font-weight:700; letter-spacing:.02em;">
-  빌드 버전: v4.5 (사진 앱내 크게보기로 전환) · 2026-08-23
+  빌드 버전: v4.6 (여권사진 2장 + 삭제버튼) · 2026-08-23
 </div>
 
 <div id="topbar">
@@ -787,7 +792,8 @@ const infoDefs = [
     {key:'expiry', label:'유효기간', placeholder:'만료일'},
     {key:'note1', label:'비고1', placeholder:''},
     {key:'note2', label:'비고2', placeholder:''},
-    {key:'image', label:'사진', type:'image'}
+    {key:'image1', label:'사진1', type:'image'},
+    {key:'image2', label:'사진2', type:'image'}
   ]},
   {key:'idp', label:'국제면허', icon:'🚗', fields:[
     {key:'issued', label:'발급일', placeholder:''},
@@ -881,6 +887,7 @@ async function handleImageFileSelect(infoKey, fieldKey){
   previewEl.src = dataUrl;
   previewEl.style.display = 'block';
   document.getElementById('mf-'+fieldKey+'-fallback').style.display = 'none';
+  document.getElementById('mf-'+fieldKey+'-del').style.display = 'block';
   hiddenEl.value = dataUrl; // 업로드 전이라도 최소한 이 기기에는 바로 반영되도록 임시 저장
 
   function saveLocalOnly(){
@@ -927,6 +934,30 @@ async function handleImageFileSelect(infoKey, fieldKey){
   }
 }
 
+function handleImageDelete(infoKey, fieldKey){
+  if(!confirm('사진을 삭제할까요?')) return;
+  document.getElementById('mf-'+fieldKey).value = '';
+  const previewEl = document.getElementById('mf-'+fieldKey+'-preview');
+  previewEl.src = '';
+  previewEl.style.display = 'none';
+  document.getElementById('mf-'+fieldKey+'-fallback').style.display = 'none';
+  document.getElementById('mf-'+fieldKey+'-del').style.display = 'none';
+  document.getElementById('mf-'+fieldKey+'-file').value = '';
+
+  let obj = {};
+  try{ obj = JSON.parse(store.get('info_'+infoKey) || '{}') || {}; }catch(e){ obj = {}; }
+  delete obj[fieldKey];
+  const newRaw = JSON.stringify(obj);
+  store.set('info_'+infoKey, newRaw);
+  renderInfoCards();
+
+  const statusEl = document.getElementById('mf-'+fieldKey+'-status');
+  statusEl.textContent = '삭제됨';
+  pushFieldToSheet('info', infoKey, 'value', newRaw).then(result=>{
+    statusEl.textContent = result.ok ? '삭제 및 동기화 완료' : syncStatusLabel(result);
+  });
+}
+
 function openModal(key,label){
   const def = infoDefs.find(d=>d.key===key);
   document.getElementById('modalTitle').textContent = label;
@@ -940,6 +971,11 @@ function openModal(key,label){
       // 예전에 자유 텍스트로 저장해둔 값이 있으면 사라지지 않도록 첫 번째 칸에 넣어준다
       if(raw) saved[def.fields[0].key] = raw;
     }
+    // 예전엔 사진 칸이 하나(image)였다가 여러 장(image1, image2...)으로 바뀐 경우, 기존 사진이 안 사라지게 옮겨준다
+    if(saved.image && !saved.image1 && def.fields.some(f=>f.key==='image1')){
+      saved.image1 = saved.image;
+      delete saved.image;
+    }
     fieldsBox.style.display = 'block';
     textarea.style.display = 'none';
     fieldsBox.innerHTML = def.fields.map(f=>{
@@ -949,7 +985,10 @@ function openModal(key,label){
           <label>${f.label}</label>
           <div class="mf-image-box">
             <input type="hidden" id="mf-${f.key}" value="${imgUrl.replace(/"/g,'&quot;')}">
-            <input type="file" accept="image/*" id="mf-${f.key}-file">
+            <div class="mf-image-controls">
+              <input type="file" accept="image/*" id="mf-${f.key}-file">
+              <div class="mf-image-del" id="mf-${f.key}-del" style="${imgUrl?'':'display:none;'}">삭제</div>
+            </div>
             <img id="mf-${f.key}-preview" class="mf-image-preview" src="${imgUrl}" style="${imgUrl?'':'display:none;'} cursor:pointer;" onclick="openPhotoLightbox(this.src)" onerror="this.style.display='none'; document.getElementById('mf-${f.key}-fallback').style.display='block';">
             <div id="mf-${f.key}-fallback" class="mf-image-fallback" style="display:none;" onclick="openPhotoLightbox('${imgUrl}')">이미지 미리보기 실패 — 탭해서 열기 ↗</div>
             <div class="mf-image-status" id="mf-${f.key}-status"></div>
@@ -965,6 +1004,7 @@ function openModal(key,label){
     def.fields.filter(f=>f.type==='image').forEach(f=>{
       const fileInput = document.getElementById('mf-'+f.key+'-file');
       fileInput.addEventListener('change', ()=> handleImageFileSelect(key, f.key));
+      document.getElementById('mf-'+f.key+'-del').addEventListener('click', ()=> handleImageDelete(key, f.key));
     });
   } else {
     fieldsBox.style.display = 'none';
