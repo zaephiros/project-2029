@@ -411,14 +411,26 @@ function renderHome(){
   const st = yearStats(completed);
   const upcoming = upcomingFuture();
 
-  const listHtml = rounds.length ? rounds.map(r=>`
-    <div class="round-row m-tinted" style="--m-color:${monthColor(r.month)}" data-edit-round="${r.year}|${r.rowIndex}" title="탭하여 후기 입력/수정">
+  const listHtml = rounds.length ? rounds.map(r=>{
+    // STAT의 "스코어 추이"와 같은 고정 범위(scoreBarFrac, 82~99타)로 이 라운드 스코어가
+    // 얼마나 좋았는지를 계산해서, 그 비율만큼 행 배경을 진하게 채운 "막대"로 표현한다.
+    // 월별 색(--m-color)은 그대로 두고(기존 포맷 유지), 그 색을 조금 더 진하게 왼쪽부터
+    // 채워서 옅게 깔린 월별 배경 위에 스코어 막대가 겹쳐 보이게 한다. 예정 라운드처럼
+    // 아직 스코어가 없는 행은 막대 없이 기존 그대로 둔다.
+    const hasScore = !r._pending && typeof r.level==='number' && isFinite(r.level);
+    const barPct = hasScore ? Math.max(scoreBarFrac(r.level)*100, 4) : 0;
+    const barStyle = hasScore
+      ? `background-image:linear-gradient(to right, color-mix(in srgb, var(--m-color) 45%, transparent) 0%, color-mix(in srgb, var(--m-color) 45%, transparent) ${barPct}%, transparent ${barPct}%, transparent 100%);`
+      : '';
+    return `
+    <div class="round-row m-tinted" style="--m-color:${monthColor(r.month)};${barStyle}" data-edit-round="${r.year}|${r.rowIndex}" title="탭하여 후기 입력/수정">
       <div class="round-date">${fmtDate(r.month,r.day)}</div>
       <div class="round-place">${esc(r.place)}</div>
       ${r.code ? `<span class="code-badge">${esc(r.code)}</span>` : ''}
       ${isPlausibleMember(r.member) ? `<span class="member-badge" title="${esc(r.member)}">${esc(truncateLabel(r.member,14))}</span>` : ''}
       ${r._pending ? `<span class="chip chip-pending">입력필요</span>` : `<span class="chip ${scoreChipClass(r.level, st.avg)}">${r.level}</span>`}
-    </div>`).join('') : '<div class="empty">아직 기록된 라운드가 없습니다.</div>';
+    </div>`;
+  }).join('') : '<div class="empty">아직 기록된 라운드가 없습니다.</div>';
 
   return `
   <div class="card">
