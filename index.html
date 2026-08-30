@@ -237,7 +237,7 @@ let STATE = {
 };
 // Code.gs를 고칠 때마다 그 안의 BACKEND_VERSION도 함께 올려서 여기 숫자와 맞춘다.
 // 배포한 Apps Script가 이 값보다 낮으면(=재배포를 안 한 경우) 화면에 안내 배너를 띄운다.
-const EXPECTED_BACKEND_VERSION = 12;
+const EXPECTED_BACKEND_VERSION = 13;
 
 function toast(msg){
   const t = document.getElementById('toast');
@@ -682,11 +682,17 @@ function renderStat(){
   const periodLabel = isFullRange ? '전체' : (fromY===toY ? `${fromY}년` : `${fromY}~${toY}년`);
 
   let monthBody;
+  // From~To가 여러 해에 걸치면 monthlyScores()가 같은 달을 연도 상관없이 합쳐서 보여준다
+  // (예: "3월"이 2022~2026년 3월을 전부 합친 값) — 카드 제목에 기간(periodLabel)이 안
+  // 붙어 있으면 이 사실이 안 보여서, 한 해치고는 라운드 수가 이상하게 많아 보여 "숫자가
+  // 틀렸다"는 오해를 사기 쉬웠다. 제목에 기간을 표시하고, 여러 해가 섞인 경우엔 그 뜻을
+  // 짧게 덧붙여서 합산 값이라는 걸 분명히 한다.
+  const monthIsMultiYear = fromY !== toY;
   if(statMonth===null){
     const monthly = monthlyScores(fromY, toY);
     monthBody = monthly.length
       ? `<div class="chart-wrap">${hScoreBarChartSVG(monthly.map(m=>({label:m.label,value:m.value,key:m.key,suffix:`${m.value} · ${m.count}회`})), {dataAttr:'data-stat-month'})}</div>
-         <div class="legend"><span>항목을 탭하면 일자별로 볼 수 있어요</span></div>`
+         <div class="legend"><span>항목을 탭하면 일자별로 볼 수 있어요${monthIsMultiYear ? ' · 여러 해 데이터라 같은 달끼리 합쳐서 보여드려요' : ''}</span></div>`
       : '<div class="empty">해당 기간 기록이 없습니다.</div>';
   } else {
     const daily = dailyScores(fromY, toY, statMonth);
@@ -729,7 +735,7 @@ function renderStat(){
     ` : '<div class="empty">해당 기간 기록이 없습니다.</div>'}
   </div>
   <div class="card">
-    <h2>월별 스코어${statMonth?` · ${statMonth}월`:''}</h2>
+    <h2>${periodLabel} 월별 스코어${statMonth?` · ${statMonth}월`:''}</h2>
     ${rangeControlHtml('statFromSel','statToSel','statRangeAll')}
     ${monthBody}
   </div>
@@ -738,7 +744,7 @@ function renderStat(){
     ${hist.length ? `<div class="chart-wrap">${hCountBarChartSVG(hist)}</div>` : '<div class="empty">해당 기간 기록이 없습니다.</div>'}
   </div>
   <div class="card">
-    <h2>자주 간 코스 TOP ${freq.length}</h2>
+    <h2>${periodLabel} 자주 간 코스 TOP ${freq.length}</h2>
     ${freq.length ? `<div class="chart-wrap">${hBarChartSVG(freq)}</div>` : '<div class="empty">해당 기간 기록이 없습니다.</div>'}
   </div>
   <div class="card">
