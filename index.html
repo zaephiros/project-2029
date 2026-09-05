@@ -947,10 +947,22 @@ function monthDayDist(m1,d1,m2,d2){
   let diff = Math.abs(t1-t2)/86400000;
   return Math.min(diff, 365-diff);
 }
+// "이 코스에서 쳤던 기억 다 모아줘" / "OO랑 쳤던 라운드 다 찾아줘"처럼, 오늘 날짜와
+// 상관없이 코스·동반자·코드·후기 전체에서 부분 일치(LIKE)로 검색한다. 리뷰 탭 검색과
+// 같은 방식(소문자로 맞춰 includes)이라 동작이 익숙하다. 검색어가 있는 동안은
+// "오늘의 추억"/"이번주의 추억" 대신 검색 결과만 보여준다.
+let memoryQuery = '';
 function renderMemories(){
   const today = new Date();
   const tm = today.getMonth()+1, td = today.getDate();
   const rounds = allRoundsFlat();
+
+  const q = memoryQuery.trim().toLowerCase();
+  const searchResults = q
+    ? rounds.filter(r => (r.place+(r.member||'')+(r.code||'')+(r.review||'')).toLowerCase().includes(q))
+        .sort((a,b)=> (b.year-a.year) || (b.month-a.month) || (b.day-a.day) || (b.no-a.no))
+    : null;
+
   const sameDay = rounds.filter(r=>r.month===tm && r.day===td).sort((a,b)=>b.year-a.year);
   const sameWeek = rounds.filter(r=>{
     if(r.month===tm && r.day===td) return false;
@@ -979,7 +991,24 @@ function renderMemories(){
     }).join('');
   }
 
+  const searchBar = `
+  <div class="card">
+    <div class="search-row">
+      <input id="memorySearch" type="text" placeholder="코스·동반자 검색" value="${esc(memoryQuery)}">
+    </div>
+  </div>`;
+
+  if(searchResults !== null){
+    return `
+    ${searchBar}
+    <div class="card">
+      <h2>'${esc(memoryQuery.trim())}' 검색 결과 (${searchResults.length}건)</h2>
+      ${searchResults.length ? cardsWithExpand(searchResults,'-sr') : '<div class="empty">일치하는 추억이 없습니다.</div>'}
+    </div>`;
+  }
+
   return `
+  ${searchBar}
   <div class="card">
     <h2>오늘의 추억 (${tm}/${td})</h2>
     ${sameDay.length ? cardsWithExpand(sameDay,'-md') : '<div class="empty">오늘 날짜에 라운드한 기록이 없습니다.</div>'}
@@ -1005,6 +1034,14 @@ function afterRender(hash){
     if(sel) sel.addEventListener('change', ()=>{ reviewFilterYear = sel.value; render(); });
     if(inp){
       inp.addEventListener('input', ()=>{ reviewQuery = inp.value; render(); });
+      const endPos = inp.value.length;
+      inp.focus(); inp.setSelectionRange(endPos,endPos);
+    }
+  }
+  if(hash.startsWith('#memories')){
+    const inp = document.getElementById('memorySearch');
+    if(inp){
+      inp.addEventListener('input', ()=>{ memoryQuery = inp.value; render(); });
       const endPos = inp.value.length;
       inp.focus(); inp.setSelectionRange(endPos,endPos);
     }
