@@ -1019,6 +1019,22 @@ function renderMemories(){
   </div>`;
 }
 
+// 한글(또는 일본어 등) IME로 글자를 조합하는 도중에 매 입력마다 render()를 호출해서
+// input 엘리먼트를 통째로 다시 그리면, 브라우저가 들고 있던 "조합 중" 상태가 끊겨서
+// "안서"처럼 입력해도 낱자로 풀어진("ㅇㅏㄴㅅㅓ") 채로 굳어버리는 문제가 있었다 — 검색창에
+// 한글을 치면 자모가 분리된다는 피드백으로 확인됐다. 조합이 끝난 뒤(compositionend)에만
+// 값을 반영해서 다시 그리도록 해서, 조합 중에는 입력창을 안 건드린다. 영문처럼 조합이
+// 필요 없는 입력은 예전처럼 매 키 입력마다 바로 반영된다(input 이벤트, composing이 아닐 때).
+function bindSearchInput(inp, onChange){
+  if(!inp) return;
+  let composing = false;
+  inp.addEventListener('compositionstart', ()=>{ composing = true; });
+  inp.addEventListener('compositionend', ()=>{ composing = false; onChange(inp.value); });
+  inp.addEventListener('input', ()=>{ if(composing) return; onChange(inp.value); });
+  const endPos = inp.value.length;
+  inp.focus(); inp.setSelectionRange(endPos,endPos);
+}
+
 /* ======================= 렌더 후 이벤트 바인딩 ======================= */
 function afterRender(hash){
   document.querySelectorAll('[data-toggle-review]').forEach(el=>{
@@ -1030,21 +1046,11 @@ function afterRender(hash){
   });
   if(hash.startsWith('#review')){
     const sel = document.getElementById('reviewYearSel');
-    const inp = document.getElementById('reviewSearch');
     if(sel) sel.addEventListener('change', ()=>{ reviewFilterYear = sel.value; render(); });
-    if(inp){
-      inp.addEventListener('input', ()=>{ reviewQuery = inp.value; render(); });
-      const endPos = inp.value.length;
-      inp.focus(); inp.setSelectionRange(endPos,endPos);
-    }
+    bindSearchInput(document.getElementById('reviewSearch'), (v)=>{ reviewQuery = v; render(); });
   }
   if(hash.startsWith('#memories')){
-    const inp = document.getElementById('memorySearch');
-    if(inp){
-      inp.addEventListener('input', ()=>{ memoryQuery = inp.value; render(); });
-      const endPos = inp.value.length;
-      inp.focus(); inp.setSelectionRange(endPos,endPos);
-    }
+    bindSearchInput(document.getElementById('memorySearch'), (v)=>{ memoryQuery = v; render(); });
   }
   if(hash.startsWith('#stat')){
     // "스코어 추이"와 "월별 스코어" 두 카드가 같은 From~To 구간을 공유한다 —
